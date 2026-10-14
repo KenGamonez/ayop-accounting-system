@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AuditEvent, COA, InventoryItem, JournalEntry, PurchaseOrder, Staff, STAFF, Txn, TxnStatus, seedAudit, seedInventory, seedJournal, seedPOs, seedTransactions } from '../data/seed';
 import { applyReceipt, defaultInventoryTypeFor, guardTransition, isAllowed, nextTxnId, staffIdForName } from '../data/ops';
+import { verifyDemoLogin } from '../data/demoAccess';
 import { getSupabaseClient, readBackendEnv, resolveBackendMode } from '../data/backend';
 import {
   createLiveTxn, listLiveTxns, mapRpcError, membershipToStaff, resolveLiveMembership,
@@ -25,6 +26,9 @@ interface Store {
   user: Staff | null;
   login: (id: string) => void;
   logout: () => void;
+  /** Demo presentation gate: true after the public demo credential check. */
+  demoAuthed: boolean;
+  unlockDemo: (username: string, password: string) => { ok: boolean; message: string };
   /** Backend posture: demo (local), live (Supabase), or setup-error (misconfigured live). */
   mode: 'demo' | 'live' | 'setup-error';
   /** Live-mode membership resolved from the signed-in session; null until linked sign-in. */
@@ -68,6 +72,7 @@ function load<T>(k: string, fb: T): T {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(() => (LIVE_MODE ? null : load('user', null as string | null)));
+  const [demoAuthed, setDemoAuthed] = useState<boolean>(() => load('demoAuth', false));
   const [txns, setTxns] = useState<Txn[]>(() => (LIVE_MODE
     ? []
     : load('txns', seedTransactions).map(t => ({
@@ -84,6 +89,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     try {
       if (!LIVE_MODE) localStorage.setItem(KEY + ':user', JSON.stringify(userId));
+      localStorage.setItem(KEY + ':demoAuth', JSON.stringify(demoAuthed));
       // Live transactions are never written to localStorage: demo and live
       // records must not mix invisibly.
       if (!LIVE_MODE) localStorage.setItem(KEY + ':txns', JSON.stringify(txns));
@@ -92,7 +98,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem(KEY + ':je', JSON.stringify(journal));
       localStorage.setItem(KEY + ':audit', JSON.stringify(audit));
     } catch { /* private mode */ }
-  }, [userId, txns, inventory, pos, journal, audit]);
+  }, [userId, demoAuthed, txns, inventory, pos, journal, audit]);
 
   const liveClient = () => getSupabaseClient(ENV.url ?? '', ENV.anonKey ?? '');
 
@@ -198,7 +204,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const value: Store = {
     user,
     login: (id) => setUserId(id),
-    logout: () => setUserId(null),
+    logout: () => { setUserId(null); setDemoAuthed(false); },
+    demoAuthed,
+    unlockDemo: (username, password) => {
+      if (!verifyDemoLogin(username, password)) {
+        return { ok: false, message: 'Incorrect demo username or password. Check the presentation credentials and try again.' };
+      }
+      setDemoAuthed(true);
+      setUserId(prev => prev ?? 'dani');
+      return { ok: true, message: 'Demo access unlocked.' };
+    },
     mode: SETUP_ERROR ? 'setup-error' : LIVE_MODE ? 'live' : 'demo',
     liveStaff,
     liveError,

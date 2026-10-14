@@ -19,7 +19,8 @@ import ImportExport from './pages/ImportExport';
 import CloseChecklist from './pages/CloseChecklist';
 
 function Guard({ children }: { children: React.ReactNode }) {
-  const { user } = useStore();
+  const { user, mode, demoAuthed } = useStore();
+  if (mode !== 'live' && !demoAuthed) return <Navigate to="/admin/login" replace />;
   if (!user) return <Navigate to="/admin/login" replace />;
   return <>{children}</>;
 }

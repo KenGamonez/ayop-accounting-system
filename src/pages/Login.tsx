@@ -1,18 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { STAFF } from '../data/seed';
 import { useStore } from '../store/AppStore';
 
 export default function Login() {
-  const { login, mode, liveLogin, liveError } = useStore();
+  const { mode, liveLogin, liveError, unlockDemo, demoAuthed } = useStore();
   const nav = useNavigate();
-  const [demoId, setDemoId] = useState('dani');
-  const [pin, setPin] = useState('demo-1234');
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [email, setEmail] = useState('');
+  const [showPw, setShowPw] = useState(false);
+  const [demoErr, setDemoErr] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const enter = (id: string) => { login(id); nav('/admin'); };
+  const enterDemo = () => {
+    const res = unlockDemo(username, password);
+    if (!res.ok) { setDemoErr(res.message); return; }
+    setDemoErr('');
+    nav('/admin');
+  };
   const enterLive = async () => {
     setBusy(true);
     const res = await liveLogin(email, password);
@@ -65,22 +70,24 @@ export default function Login() {
           </div>
         </div>
         <div className="login-form">
-          <h2 style={{ margin: '0 0 4px', color: '#14234a' }}>Staff entry</h2>
-          <p className="small muted" style={{ margin: '0 0 10px' }}>Select a staff profile to preview their workspace. Fictional demo credentials only.</p>
-          <div className="staff-list">
-            {STAFF.map(s => (
-              <button key={s.id} className="staff-btn" onClick={() => enter(s.id)}>
-                <span className="avatar">{s.initials}</span>
-                <span><strong>{s.name}</strong><br /><span className="small muted">{s.role} · {s.unit}</span></span>
-                <span style={{ marginLeft: 'auto' }} className="small muted">Enter →</span>
-              </button>
-            ))}
+          <h2 style={{ margin: '0 0 4px', color: '#14234a' }}>DEMO PRESENTATION</h2>
+          <p className="small muted" style={{ margin: '0 0 10px' }}>Sign in with the presentation credentials, then switch between the seven staff profiles from the top bar.</p>
+          {demoAuthed && <div className="notice">Demo access is already unlocked on this browser. <button className="btn small" onClick={() => nav('/admin')}>Continue to dashboard →</button></div>}
+          {demoErr && <div className="warn">{demoErr}</div>}
+          <div className="form-grid">
+            <label className="f full">Demo username<input value={username} onChange={e => { setUsername(e.target.value); setDemoErr(''); }} placeholder="ayop-demo" autoComplete="username" /></label>
+            <label className="f full">Demo password
+              <span style={{ display: 'flex', gap: 8 }}>
+                <input type={showPw ? 'text' : 'password'} value={password} onChange={e => { setPassword(e.target.value); setDemoErr(''); }} placeholder="••••••••" autoComplete="current-password" style={{ flex: 1 }}
+                  onKeyDown={e => { if (e.key === 'Enter') enterDemo(); }} />
+                <button className="btn ghost small" onClick={() => setShowPw(s => !s)}>{showPw ? 'Hide' : 'Show'}</button>
+              </span>
+            </label>
           </div>
-          <div className="form-grid" style={{ marginTop: 12 }}>
-            <label className="f">Demo ID<select value={demoId} onChange={e => setDemoId(e.target.value)}>{STAFF.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}</select></label>
-            <label className="f">Demo passphrase<input value={pin} onChange={e => setPin(e.target.value)} placeholder="demo-****" /></label>
-            <label className="f" style={{ justifyContent: 'flex-end' }}><span>&nbsp;</span><button className="btn" onClick={() => enter(demoId)}>Continue as staff</button></label>
+          <div className="btn-row" style={{ marginTop: 12 }}>
+            <button className="btn" disabled={!username.trim() || !password} onClick={enterDemo}>Unlock demo →</button>
           </div>
+          <p className="small muted" style={{ marginTop: 12 }}>Public demo access — the presentation credentials unlock only synthetic demo data and protect nothing. Never reuse them for real accounts.</p>
         </div>
       </div>
     </div>

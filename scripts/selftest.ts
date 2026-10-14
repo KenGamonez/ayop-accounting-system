@@ -10,6 +10,7 @@ import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
+import { DEMO_USERNAME, DEMO_PASSWORD, DEMO_AUTH_KEY, verifyDemoLogin } from '../src/data/demoAccess.ts';
 import { mapDbTxn, mapRpcError, membershipToStaff, toDbPayload, type DbTxnRow } from '../src/data/live.ts';
 import { readFileSync } from 'node:fs';
 import { resolveBackendMode } from '../src/data/backend.ts';
@@ -613,6 +614,19 @@ check('draft RPC validates structure before the trigger (friendly errors, idempo
   && mig3.includes('UNBALANCED') && mig3.includes('BAD_ACCOUNT')
   && mig3.includes('on conflict (created_by, idempotency_key) do nothing')
   && mig3.includes("'Draft', v_actor, nullif(p_idem, '')"));
+
+// ---- demo presentation access ----
+check('demo credentials verify correctly',
+  verifyDemoLogin('ayop-demo', 'jem51-demo') === true
+  && verifyDemoLogin('  AYOP-DEMO  ', 'jem51-demo') === true
+  && verifyDemoLogin('ayop-demo', 'wrong') === false
+  && verifyDemoLogin('someone-else', 'jem51-demo') === false
+  && verifyDemoLogin('', '') === false
+  && DEMO_USERNAME === 'ayop-demo' && DEMO_PASSWORD === 'jem51-demo'
+  && DEMO_AUTH_KEY === 'jem51-demo-auth');
+check('all seven switchable profiles exist with canonical ids',
+  STAFF.map(s => s.id).join() === 'joy,eve,dani,jeann,jinky,mae,rodel'
+  && STAFF.every(s => s.id && s.name && s.role && s.unit));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

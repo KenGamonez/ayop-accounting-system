@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/AppStore';
+import { STAFF } from '../data/seed';
 import { canVisit, navFor } from '../data/access';
 
 export interface Sub { to: string; label: string }
@@ -78,7 +79,7 @@ function Row({ item, path, onNav }: { item: Item; path: string; onNav: () => voi
 }
 
 export default function Layout() {
-  const { user, logout, mode, liveLogout } = useStore();
+  const { user, login, logout, mode, liveLogout } = useStore();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
@@ -117,7 +118,14 @@ export default function Layout() {
               {mode === 'demo' ? 'Demo' : mode === 'live' ? 'Live' : 'Setup needed'}
             </span>
             <button className="btn ghost small" onClick={() => nav('/admin/approval')}>Approvals</button>
-            <button className="btn ghost small" onClick={() => { if (mode === 'live') { void liveLogout().then(() => nav('/admin/login')); } else { logout(); nav('/admin/login'); } }}>Switch staff</button>
+            {mode !== 'live' && (
+              <label className="small muted" style={{ display: 'flex', gap: 6, alignItems: 'center' }}>Role
+                <select value={user?.id ?? ''} onChange={e => login(e.target.value)} aria-label="Switch staff role">
+                  {STAFF.map(s => <option key={s.id} value={s.id}>{s.name} — {s.role}</option>)}
+                </select>
+              </label>
+            )}
+            <button className="btn ghost small" onClick={() => { if (mode === 'live') { void liveLogout().then(() => nav('/admin/login')); } else { logout(); nav('/admin/login'); } }}>Log out</button>
           </div>
         </div>
         {mode === 'demo' && (
