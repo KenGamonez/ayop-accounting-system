@@ -23,6 +23,7 @@ const NAV: Item[] = [
       { to: '/admin/income-expense', label: 'Income & Expense' },
       { to: '/admin/financial-condition', label: 'Financial Condition' },
       { to: '/admin/reports', label: 'All Reports (Printable)' },
+      { to: '/admin/close', label: 'Month-End Close' },
       { to: '/admin/accounting?tab=gl', label: 'General Ledger' },
       { to: '/admin/accounting?tab=coa', label: 'Chart of Accounts' },
       { to: '/admin/accounting?tab=ap', label: 'Accounts Payable' },

@@ -15,6 +15,7 @@ import Inventory from './pages/Inventory';
 import Purchasing from './pages/Purchasing';
 import { BusinessUnits, Settings } from './pages/Ops';
 import ImportExport from './pages/ImportExport';
+import CloseChecklist from './pages/CloseChecklist';
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { user } = useStore();
@@ -42,6 +43,7 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalance />} />
             <Route path="income-expense" element={<IncomeExpense />} />
             <Route path="financial-condition" element={<FinancialCondition />} />
+            <Route path="close" element={<CloseChecklist />} />
             <Route path="approval" element={<Approval />} />
             <Route path="inventory" element={<Inventory />} />
             <Route path="purchasing" element={<Purchasing />} />

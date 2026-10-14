@@ -3,6 +3,7 @@ import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed, nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
+import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
@@ -180,6 +181,76 @@ const cond2 = conditionSummary([
 ], ALL);
 check('condition totals + difference', cond2.totalAssets === 5000 && cond2.totalLiabilities === 2000
   && cond2.difference === 3000 && cond2.assets[0].account === '1000 — Cash on Hand', cond2);
+
+// ---- month-end close checklist ----
+check('month range math', monthRange(2026, 10).from === '2026-10-01'
+  && monthRange(2026, 10).to === '2026-10-31'
+  && monthRange(2026, 2).to === '2026-02-28'
+  && monthRange(2026, 10).label === 'October 2026');
+const closeTxns: Txn[] = [
+  mkTxn({ id: 'C1', date: '2026-10-05', status: 'For Accountant Review' }),
+  mkTxn({ id: 'C2', date: '2026-10-06', status: 'For Owner Approval' }),
+  mkTxn({ id: 'C3', date: '2026-10-07', status: 'Rejected' }),
+  mkTxn({ id: 'C4', date: '2026-09-20', status: 'For Accountant Review' }),
+  mkTxn({ id: 'C5', date: '2026-10-08', status: 'Approved', classification: 'Liability', accountCode: '2000', accountName: 'Accounts Payable' }),
+  mkTxn({ id: 'C6', date: '2026-10-09', status: 'Posted', classification: 'Expense', amount: 300 }),
+  mkTxn({ id: 'C7', date: '2026-10-10', status: 'Posted', classification: 'Revenue', amount: 300 }),
+  mkTxn({ id: 'C8', date: '2026-10-11', status: 'Posted', classification: 'Expense', amount: 100, businessUnit: 'Dialysis Center' }),
+];
+const closeJournal = [
+  { id: 'J1', date: '2026-10-12', ref: 'JV-1', particulars: 'Draft', businessUnit: 'Pharmacy', debitAccount: '5000 — X', creditAccount: '1000 — Y', amount: 10, status: 'Draft' as const, sourceTxn: 'X' },
+  { id: 'J2', date: '2026-10-12', ref: 'JV-2', particulars: 'Posted', businessUnit: 'Pharmacy', debitAccount: '5000 — X', creditAccount: '1000 — Y', amount: 10, status: 'Posted' as const, sourceTxn: 'X' },
+];
+const closePOs = [
+  { id: 'P1', poNo: 'PO-A', date: '2026-10-01', supplier: 'S', businessUnit: 'Pharmacy', deliveryDate: '2026-10-20', items: [{ item: 'G', quantity: 10, supplierPrice: 5, receivedQty: 4 }], total: 50, received: false, receivedDate: '', status: 'Sent to Supplier' as const },
+  { id: 'P2', poNo: 'PO-B', date: '2026-10-01', supplier: 'S', businessUnit: 'Pharmacy', deliveryDate: '2026-10-20', items: [{ item: 'G', quantity: 10, supplierPrice: 5, receivedQty: 10 }], total: 50, received: true, receivedDate: '2026-10-15', status: 'Received' as const },
+  { id: 'P3', poNo: 'PO-C', date: '2026-10-01', supplier: 'S', businessUnit: 'Pharmacy', deliveryDate: '2026-10-20', items: [{ item: 'G', quantity: 10, supplierPrice: 5, receivedQty: 0 }], total: 50, received: false, receivedDate: '', status: 'Cancelled' as const },
+];
+const closeBase = { txns: closeTxns, journal: closeJournal, pos: closePOs, year: 2026, month: 10, unit: 'All units', reportReviewed: false };
+const cr = computeClose(closeBase);
+const byId = Object.fromEntries(cr.checks.map(c => [c.id, c]));
+check('each queue check counts scoped items',
+  byId['acct-review'].count === 1 && byId['acct-review'].status === 'attention'
+  && byId['owner-approval'].count === 1
+  && byId['rejected'].count === 1
+  && byId['journal-drafts'].count === 1
+  && byId['po-outstanding'].count === 1
+  && byId['payables'].count === 1, cr.checks.map(c => [c.id, c.count, c.status]));
+check('september items excluded from october scope', !cr.checks.some(c => JSON.stringify(c).includes('C4')));
+check('trial balance honest on demo data', cr.tbState === 'out'
+  && byId['trial-balance'].status === 'attention'
+  && /Out of balance/.test(byId['trial-balance'].detail), byId['trial-balance']);
+check('completion derived, status Open while review unsigned',
+  cr.completed === 0 && cr.total === 8 && cr.periodStatus === 'Open', { completed: cr.completed, periodStatus: cr.periodStatus });
+const crAcked = computeClose({ ...closeBase, reportReviewed: true });
+check('acked review with exceptions → Review Required', crAcked.periodStatus === 'Review Required'
+  && crAcked.completed === 1, crAcked.periodStatus);
+// clean month: everything posted/balanced, no drafts, acked
+const cleanTxns: Txn[] = [
+  mkTxn({ id: 'K1', date: '2026-10-05', classification: 'Expense', amount: 200 }),
+  mkTxn({ id: 'K2', date: '2026-10-06', classification: 'Revenue', amount: 200 }),
+];
+const clean = computeClose({ txns: cleanTxns, journal: [], pos: [], year: 2026, month: 10, unit: 'All units', reportReviewed: true });
+check('clean month completes', clean.periodStatus === 'Checklist Complete' && clean.completed === 8
+  && clean.tbState === 'balanced', { periodStatus: clean.periodStatus, completed: clean.completed });
+// empty period: no data anywhere
+const empty = computeClose({ txns: [], journal: [], pos: [], year: 2026, month: 11, unit: 'All units', reportReviewed: true });
+check('empty period: TB No Data (na), rest clear, complete',
+  empty.tbState === 'nodata'
+  && empty.checks.find(c => c.id === 'trial-balance')?.status === 'na'
+  && /No eligible posted entries/.test(empty.checks.find(c => c.id === 'trial-balance')?.detail ?? '')
+  && empty.periodStatus === 'Checklist Complete', empty.checks.map(c => [c.id, c.status]));
+// unit scope respected
+const scoped = computeClose({ ...closeBase, unit: 'Dialysis Center' });
+const sById = Object.fromEntries(scoped.checks.map(c => [c.id, c]));
+check('unit scope filters queues', sById['acct-review'].count === 0 && sById['acct-review'].status === 'clear'
+  && sById['po-outstanding'].count === 0, scoped.checks.map(c => [c.id, c.count]));
+// fingerprint invalidates on data change
+const fp1 = closeFingerprint({ ...cr, checks: cr.checks.filter(c => c.id !== 'report-review') });
+const crChanged = computeClose({ ...closeBase, txns: [...closeTxns, mkTxn({ id: 'C9', date: '2026-10-12', status: 'For Accountant Review' })] });
+const fp2 = closeFingerprint({ ...crChanged, checks: crChanged.checks.filter(c => c.id !== 'report-review') });
+check('fingerprint changes with data (stale ack invalidates)', fp1 !== fp2
+  && crChanged.checks.find(c => c.id === 'acct-review')?.count === 2);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

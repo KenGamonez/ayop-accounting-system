@@ -53,6 +53,7 @@ export default function Reports() {
           { to: '/admin/trial-balance', t: 'Trial Balance', d: 'Debit / credit balance check across ledger accounts.' },
           { to: '/admin/income-expense', t: 'Statement of Income & Expense', d: 'Revenue vs. expenses by business unit (staff terminology).' },
           { to: '/admin/financial-condition', t: 'Statement of Financial Condition', d: 'Assets, liabilities, and equity snapshot (demo).' },
+          { to: '/admin/close', t: 'Month-End Close', d: 'Checklist: review queues, receipts, Trial Balance, and statement review.' },
           { to: '/admin/journal', t: 'Journal Register', d: 'Posted journal entries with source transactions.' },
           { to: '/admin/accounting', t: 'General Ledger', d: 'Posted ledger lines with account mapping.' },
           { to: '/admin/purchasing', t: 'Purchasing & Receiving', d: 'P.O. log with supplier, delivery date, and receiving status.' },
