@@ -5,6 +5,7 @@
 // original impact instead of adding to it. Covered by scripts/selftest.ts.
 
 import { countsAsPosted } from './ops';
+import { COA } from './seed';
 import type { Classification, Txn } from './seed';
 
 export interface Scope {
@@ -84,8 +85,7 @@ export function incomeSummary(txns: Txn[], s: Scope): IncomeResult {
   return { revenueLines, expenseLines, totalRevenue, totalExpense, net: totalRevenue - totalExpense };
 }
 
-export interface ConditionGroup { account: string; amount: number }
-export interface ConditionResult {
+export interface ConditionGroup { account: string; amount: number }export interface ConditionResult {
   assets: ConditionGroup[];
   liabilities: ConditionGroup[];
   totalAssets: number;
@@ -118,5 +118,99 @@ export function conditionSummary(txns: Txn[], s: Scope): ConditionResult {
     periodRevenue: sumByClass(txns, s, 'Revenue'),
     periodExpense: sumByClass(txns, s, 'Expense'),
     difference: totalAssets - totalLiabilities,
+  };
+}
+
+// ---------- account-first General Ledger ----------
+
+export interface AccountRecord { code: string; name: string; type: string }
+
+/** Look up an account in the current Chart of Accounts. Never fabricated. */
+export function getAccount(code: string): AccountRecord | null {
+  const found = COA.find(c => c.code === (code ?? '').trim());
+  return found ? { code: found.code, name: found.name, type: found.type } : null;
+}
+
+export function accountOptions(): AccountRecord[] {
+  return COA.map(c => ({ code: c.code, name: c.name, type: c.type }));
+}
+
+/** Normal-balance side: debit-normal for Asset/Expense, credit-normal otherwise. */
+export function isDebitNormal(accountType: string): boolean {
+  return accountType === 'Asset' || accountType === 'Expense';
+}
+
+export interface LedgerLine {
+  date: string;
+  ref: string;
+  particulars: string;
+  unit: string;
+  debit: number;
+  credit: number;
+  balance: number;
+  reversalOf?: string;
+}
+
+export interface AccountLedger {
+  account: AccountRecord;
+  opening: number;
+  lines: LedgerLine[];
+  totalDebit: number;
+  totalCredit: number;
+  closing: number;
+}
+
+/**
+ * One account's posted ledger activity. Entries map to their debit/credit
+ * side by classification (same model as the Trial Balance); the running
+ * balance follows the account's normal side. Opening comes from eligible
+ * posted entries before the start date — when no start date is set the
+ * opening is 0 and every eligible entry is shown.
+ */
+export function accountLedger(txns: Txn[], code: string, s: Scope): AccountLedger | null {
+  const account = getAccount(code);
+  if (!account) return null;
+  const debitNormal = isDebitNormal(account.type);
+  const sideOf = (t: Txn): 'debit' | 'credit' =>
+    t.classification === 'Expense' || t.classification === 'Asset' ? 'debit' : 'credit';
+
+  const eligible = txns.filter(t =>
+    countsAsPosted(t.status)
+    && t.accountCode === account.code
+    && (s.unit === ALL_UNITS || t.businessUnit === s.unit));
+  const before = s.from ? eligible.filter(t => t.date < s.from) : [];
+  const inPeriod = eligible
+    .filter(t => (!s.from || t.date >= s.from) && (!s.to || t.date <= s.to))
+    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+  const effect = (t: Txn): number => {
+    const amt = signedAmount(t);
+    const onDebitSide = sideOf(t) === 'debit';
+    // Contribution to the normal-balance running total.
+    return debitNormal === onDebitSide ? amt : -amt;
+  };
+  const opening = before.reduce((sum, t) => sum + effect(t), 0);
+
+  let running = opening;
+  const lines: LedgerLine[] = inPeriod.map(t => {
+    const amt = signedAmount(t);
+    const debit = sideOf(t) === 'debit' ? amt : 0;
+    const credit = sideOf(t) === 'credit' ? amt : 0;
+    running += effect(t);
+    return {
+      date: t.date, ref: t.id,
+      particulars: `${t.item}${t.reversalOf ? ` (reversal of ${t.reversalOf})` : ''}`,
+      unit: t.businessUnit, debit, credit, balance: running,
+      reversalOf: t.reversalOf,
+    };
+  });
+
+  return {
+    account,
+    opening,
+    lines,
+    totalDebit: lines.reduce((sum, l) => sum + l.debit, 0),
+    totalCredit: lines.reduce((sum, l) => sum + l.credit, 0),
+    closing: running,
   };
 }

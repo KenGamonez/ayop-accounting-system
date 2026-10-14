@@ -2,6 +2,10 @@ export type Classification = 'Expense' | 'Revenue' | 'Asset' | 'Liability';
 export type TxnStatus = 'Draft' | 'For Accountant Review' | 'Accountant Reviewed' | 'For Owner Approval' | 'Approved' | 'Posted' | 'Rejected' | 'Reversed';
 export type CashKind = 'Cash In' | 'Cash Out' | 'Disbursement' | 'Journal';
 
+/** Selectable transaction types for new entries (client feedback: Cash In / Cash Out
+ *  removed from selectors; historical records keep their original kind). */
+export const TRANSACTION_KINDS: CashKind[] = ['Disbursement', 'Journal'];
+
 export interface Staff {
   id: string;
   name: string;

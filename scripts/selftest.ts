@@ -4,6 +4,9 @@ import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsv
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed, nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
+import { TRANSACTION_KINDS, COA } from '../src/data/seed.ts';
+import { accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
+import { NAV } from '../src/components/Layout.tsx';
 import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
@@ -251,6 +254,50 @@ const crChanged = computeClose({ ...closeBase, txns: [...closeTxns, mkTxn({ id: 
 const fp2 = closeFingerprint({ ...crChanged, checks: crChanged.checks.filter(c => c.id !== 'report-review') });
 check('fingerprint changes with data (stale ack invalidates)', fp1 !== fp2
   && crChanged.checks.find(c => c.id === 'acct-review')?.count === 2);
+
+// ---- client feedback: transaction types, GL, sidebar ----
+check('selectable types are Disbursement + Journal only',
+  TRANSACTION_KINDS.length === 2 && TRANSACTION_KINDS.includes('Disbursement' as never) && TRANSACTION_KINDS.includes('Journal' as never)
+  && !TRANSACTION_KINDS.includes('Cash In' as never) && !TRANSACTION_KINDS.includes('Cash Out' as never));
+check('approve-income account missing → needs client code + classification',
+  !COA.some(c => c.name.toLowerCase().includes('approve income')), COA.map(c => c.name));
+check('account lookup from chart (not hardcoded)',
+  getAccount('1000')?.name === 'Cash on Hand' && getAccount('1000')?.type === 'Asset'
+  && getAccount(' 4100 ')?.name === 'Pharmacy Sales' && getAccount('9999') === null
+  && accountOptions().length === COA.length);
+check('normal sides', isDebitNormal('Asset') && isDebitNormal('Expense') && !isDebitNormal('Liability') && !isDebitNormal('Revenue'));
+const glTxns: Txn[] = [
+  mkTxn({ id: 'G1', date: '2026-09-20', status: 'Posted', classification: 'Expense', amount: 100, accountCode: '5000', accountName: 'Medical Supplies Expense' }),
+  mkTxn({ id: 'G2', date: '2026-10-05', status: 'Posted', classification: 'Expense', amount: 250, accountCode: '5000', accountName: 'Medical Supplies Expense' }),
+  mkTxn({ id: 'G3', date: '2026-10-06', status: 'For Accountant Review', classification: 'Expense', amount: 999, accountCode: '5000', accountName: 'Medical Supplies Expense' }),
+  mkTxn({ id: 'G4', date: '2026-10-07', status: 'Rejected', classification: 'Expense', amount: 999, accountCode: '5000', accountName: 'Medical Supplies Expense' }),
+  mkTxn({ id: 'G5', date: '2026-10-08', status: 'Posted', classification: 'Expense', amount: 250, accountCode: '5000', accountName: 'Medical Supplies Expense', reversalOf: 'G2', item: 'REVERSAL of G2' }),
+  mkTxn({ id: 'G6', date: '2026-10-09', status: 'Posted', classification: 'Revenue', amount: 500, accountCode: '4100', accountName: 'Pharmacy Sales' }),
+  mkTxn({ id: 'G7', date: '2026-10-10', status: 'Posted', classification: 'Expense', amount: 40, accountCode: '5000', accountName: 'Medical Supplies Expense', businessUnit: 'Dialysis Center' }),
+];
+const gl = accountLedger(glTxns, '5000', { unit: 'All units', from: '2026-10-01', to: '2026-10-31' });
+check('gl: unknown code → null', accountLedger(glTxns, '9999', { unit: 'All units', from: '', to: '' }) === null);
+check('gl: pending/rejected excluded, reversal offsets',
+  gl !== null && gl.lines.length === 3 && gl.lines.map(l => l.ref).join(',') === 'G2,G5,G7'
+  && gl.opening === 100 && gl.totalDebit === 40
+  && gl.lines[2].balance === 140 && gl.closing === 140, gl);
+check('gl: running balances follow normal side',
+  gl !== null && gl.lines[0].balance === 350 && gl.lines[1].balance === 100, gl?.lines.map(l => l.balance));
+const glUnit = accountLedger(glTxns, '5000', { unit: 'Dialysis Center', from: '', to: '' });
+check('gl: unit scope + no dates', glUnit !== null && glUnit.lines.length === 1 && glUnit.opening === 0 && glUnit.closing === 40, glUnit);
+const glRev = accountLedger([
+  mkTxn({ id: 'R1', date: '2026-10-05', status: 'Posted', classification: 'Revenue', amount: 1000 }),
+  mkTxn({ id: 'R2', date: '2026-10-06', status: 'Posted', classification: 'Revenue', amount: 200, reversalOf: 'R1', item: 'REVERSAL of R1' }),
+], '4100', { unit: 'All units', from: '', to: '' });
+check('gl: credit-normal account direction', glRev !== null && glRev.lines[0].credit === 1000 && glRev.lines[0].debit === 0
+  && glRev.lines[0].balance === 1000 && glRev.lines[1].balance === 800 && glRev.closing === 800, glRev);
+const acctSubs = (NAV.find(n => n.label === 'Accounting')?.subs ?? []).map(s => s.label);
+check('sidebar: GL kept, five links removed, routes untouched',
+  acctSubs.includes('General Ledger')
+  && !acctSubs.includes('Chart of Accounts') && !acctSubs.includes('Accounts Payable')
+  && !acctSubs.includes('Accounts Receivable') && !acctSubs.includes('Bank Reconciliation')
+  && !acctSubs.includes('Audit Trail')
+  && acctSubs.includes('Trial Balance') && acctSubs.includes('Month-End Close'), acctSubs);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

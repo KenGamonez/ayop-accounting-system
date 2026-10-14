@@ -22,7 +22,7 @@ export function FilterBar({ unit, setUnit, from, setFrom, to, setTo }: { unit: s
 }
 
 /** Print-only report masthead (screen shows PageHead instead). */
-function PrintHead({ title, unit, from, to }: { title: string; unit: string; from: string; to: string }) {
+export function PrintHead({ title, unit, from, to }: { title: string; unit: string; from: string; to: string }) {
   return (
     <div className="print-head">
       <div className="print-company">Ayop Group of Companies — JEM51 Accounting System</div>

@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/AppStore';
 
-interface Sub { to: string; label: string }
-interface Item { to: string; label: string; end?: boolean; subs?: Sub[] }
+export interface Sub { to: string; label: string }
+export interface Item { to: string; label: string; end?: boolean; subs?: Sub[] }
 
-const NAV: Item[] = [
+export const NAV: Item[] = [
   { to: '/admin', label: 'Overview', end: true },
   {
     to: '/admin/transaction', label: 'Transaction', subs: [
@@ -25,11 +25,6 @@ const NAV: Item[] = [
       { to: '/admin/reports', label: 'All Reports (Printable)' },
       { to: '/admin/close', label: 'Month-End Close' },
       { to: '/admin/accounting?tab=gl', label: 'General Ledger' },
-      { to: '/admin/accounting?tab=coa', label: 'Chart of Accounts' },
-      { to: '/admin/accounting?tab=ap', label: 'Accounts Payable' },
-      { to: '/admin/accounting?tab=ar', label: 'Accounts Receivable' },
-      { to: '/admin/accounting?tab=bank', label: 'Bank Reconciliation' },
-      { to: '/admin/accounting?tab=audit', label: 'Audit Trail' },
     ],
   },
   { to: '/admin/approval', label: 'Approval' },

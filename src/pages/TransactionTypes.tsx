@@ -1,22 +1,24 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { CLASSIFICATIONS, ITEM_CATEGORIES } from '../data/seed';
+import { CLASSIFICATIONS, ITEM_CATEGORIES, TRANSACTION_KINDS } from '../data/seed';
 import { useStore } from '../store/AppStore';
 import { PageHead } from '../components/ui';
 
-const KINDS = [
-  { name: 'Disbursement', desc: 'Payments to suppliers and operating pay-outs. Requires Supplier, Item, and receipt reference.', to: '/admin/disbursement' },
-  { name: 'Cash In', desc: 'Cash collections: sales, service income, reimbursements. Entered by cashiers / frontline staff.', to: '/admin/cash-in' },
-  { name: 'Cash Out', desc: 'Petty and operational cash releases. Small outflows with cashier accountability.', to: '/admin/cash-out' },
-  { name: 'Journal', desc: 'Non-cash adjustments, transfers, and corrections. Posts only after approval.', to: '/admin/journal' },
-];
+const KIND_META: Record<string, { desc: string; to: string }> = {
+  Disbursement: { desc: 'Payments to suppliers and operating pay-outs. Requires Supplier, Item, and receipt reference.', to: '/admin/disbursement' },
+  Journal: { desc: 'Non-cash adjustments, transfers, and corrections. Posts only after approval.', to: '/admin/journal' },
+};
+
+// Selectable types only — historical Cash In / Cash Out records are preserved
+// in data but no longer offered as choices.
+const KINDS = TRANSACTION_KINDS.map(name => ({ name, ...KIND_META[name] }));
 
 export default function TransactionTypes() {
   const { txns } = useStore();
   const count = (k: string) => txns.filter(t => t.kind === k).length;
   return (
     <>
-      <PageHead title="Transaction Types" sub="Staff-requested cash workflow vocabulary. Each type routes through the same approval chain before posting." />
+      <PageHead title="Transaction Types" sub="Available types for new entries. Historical Cash In / Cash Out records are preserved in data and reports but are no longer selectable." />
       <div className="grid g2">
         {KINDS.map(k => (
           <div className="card" key={k.name}>
