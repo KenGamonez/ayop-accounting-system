@@ -28,13 +28,14 @@ Condition/Balance Sheet/Cash Flow statements with print styles, month-end
 close checklist, bank-rec worksheet, audit-trail preview. Pure logic under
 `src/data/` covered by `scripts/selftest.ts` (107 checks), `tsc`, prod build.
 
-## Backend capabilities actually verified: NONE
+## Backend capabilities actually verified (Slice 1, 2026-10-14)
 
-No `supabase/` dir, migrations, RPCs, edge functions, env vars, or server
-client in the repo. Persistence is per-browser `localStorage`
-(`jem51-demo-v1`). Login is click-to-enter profiles, no passwords. The only
-Supabase project in the org is the unrelated **Bislig Hub** app. All
-permissions are presentation-only.
+Dedicated project `ayop-accounting-system` with reference tables, seeds,
+and RLS (verified live). Demo/live boundary + live reference reads in
+`src/data/backend.ts` (verified locally; production intentionally Demo).
+No transaction writes, no Auth accounts yet — owner provisioning pending.
+
+## Standing decisions and blockers
 
 ## Standing decisions and blockers
 
@@ -54,14 +55,12 @@ invariants, tests, backup) and this state file.
 
 ## Exactly one next task
 
-**Slice 1 — Supabase project + Auth + reference read path.**
-Acceptance criteria: (1) new project provisioned (NOT Bislig Hub);
-(2) `staff`/`business_units`/`chart_of_accounts` tables + seed migration
-applied; (3) RLS read policies verified per role; (4) 7 Auth accounts
-provisioned; (5) frontend demo/live switch reads live COA + units with a
-visible mode badge; (6) `tsc` + build + selftests green; (7) no service
-key in code; (8) docs updated, commit pushed, preview verified. Do not
-start until the owner acknowledges the plan.
+**Slice 2 — Transactions + approval chain on the live backend**
+(requires Slice 1 staff provisioning confirmed first). Acceptance: server
+transition RPC with creator/self-approval guards + row locking; RLS per
+role; frontend writes through RPC with demo fallback intact; concurrency
+and guard tests green; docs updated. Do not start until provisioning
+(`docs/SLICE_1_SETUP.md` §3) is verified complete.
 
 ## Progress log
 
@@ -73,7 +72,16 @@ start until the owner acknowledges the plan.
   operations, finance builders, guards, and import/export against the code
   at `44656ff`; produced `docs/FRONTEND_WORKFLOW_SPEC.md` (workflows,
   accounting model, backend operation contracts) and
-  `docs/REQUIREMENTS_TO_CODE_MATRIX.md` (30-row evidence matrix). No app
+  `docs/REQUIREMENTS_TO_CODE_MATRIX.md` (30-row evidence table). No app
   code changed. Confirmed: single-sided demo model, presentation-only
   permissions, advisory close, no costing method, no settlement modeling.
-  Next: Slice 1 on owner acknowledgement (unchanged).
+- 2026-10-14 — Slice 1 (backend foundation): created dedicated Supabase
+  project `ayop-accounting-system` (`tgokmcupkxvgsniljqpf`,
+  ap-southeast-1); applied versioned migration (9 units, 7 staff unlinked,
+  17 COA lines, RLS + read-only policies — verified live: anon reads
+  units/COA, staff directory denied unauthenticated, no transactions
+  table); added demo/live boundary (`src/data/backend.ts`), Settings
+  backend card, live COA reads; selftests 111/111. Staff Auth provisioning
+  + linking remains an owner action (`docs/SLICE_1_SETUP.md`). Production
+  has no backend env vars and stays in Demo. Next: Slice 2 (transactions
+  + approval chain) after provisioning is confirmed.

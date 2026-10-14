@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso } from '../data/seed';
+import { fetchLiveReference, getSupabaseClient, readBackendEnv, resolveBackendMode, type LiveReference } from '../data/backend';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -46,6 +47,51 @@ export function Settings() {
           <li>Cash Flow Statement is conditional scope — not claimed here.</li>
         </ul>
       </div>
+      <BackendCard />
     </>
+  );
+}
+
+function BackendCard() {
+  const env = readBackendEnv();
+  const mode = resolveBackendMode(env);
+  const [live, setLive] = useState<LiveReference | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'live' || !env.url || !env.anonKey) return;
+    setLoading(true);
+    fetchLiveReference(getSupabaseClient(env.url, env.anonKey))
+      .then(setLive)
+      .catch((e: Error) => setError(e.message ?? 'Live read failed.'))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  return (
+    <div className="card"><h3>Backend connection (Slice 1)</h3>
+      {mode === 'demo' && (
+        <p className="small muted">Mode: <strong>Demo</strong> — local synthetic data only. Live mode activates only when <code>VITE_AYOP_BACKEND=live</code> with a configured project URL and anon key.</p>
+      )}
+      {mode === 'setup-error' && (
+        <div className="warn">Live mode is selected but the project URL or anon key is missing. Add <code>VITE_SUPABASE_URL</code> and <code>VITE_SUPABASE_ANON_KEY</code> to <code>.env.local</code> (never commit secrets). Demo data is still in use — nothing switched silently.</div>
+      )}
+      {mode === 'live' && (
+        <>
+          <p className="small muted">Mode: <strong>Live</strong> — reading verified reference data from Supabase (anon key only; no service key in this app).</p>
+          {loading && <p className="small muted">Loading reference data…</p>}
+          {error && <div className="warn">{error}</div>}
+          {live && (
+            <div className="tbl-wrap"><table className="tbl"><tbody>
+              <tr><td>Business units (live)</td><td className="num"><strong>{live.units.length}</strong></td></tr>
+              <tr><td>Chart of Accounts lines (live)</td><td className="num"><strong>{live.coa.length}</strong></td></tr>
+              <tr><td>Staff accounts linked</td><td className="num"><strong>{live.staffLinked} of {live.staffTotal}</strong>{live.staffLinked === 0 && <span className="small muted" style={{ display: 'block' }}>No accounts linked yet — see provisioning steps in docs/SLICE_1_SETUP.md.</span>}</td></tr>
+            </tbody></table></div>
+          )}
+          <p className="small muted">Transactions, approvals, and postings still use demo state in Slice 1 — live writes arrive in Slice 2.</p>
+        </>
+      )}
+    </div>
   );
 }

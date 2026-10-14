@@ -10,6 +10,9 @@ import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
+import { readFileSync } from 'node:fs';
+import { resolveBackendMode } from '../src/data/backend.ts';
+import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
 import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
@@ -515,6 +518,33 @@ check('accounting keeps consolidated visibility + protections intact',
   && canActOnApprovals('Accounting')
   && !isAllowed('Draft' as never, 'Posted' as never)
   && guardTransition({ id: 'T', createdBy: 'dani' }, 'Approved', 'dani') !== null);
+
+// ---- slice 1: demo/live boundary + reference foundation ----
+check('backend mode resolution (never silent)',
+  resolveBackendMode({}) === 'demo'
+  && resolveBackendMode({ backend: 'demo', url: 'x', anonKey: 'y' }) === 'demo'
+  && resolveBackendMode({ backend: 'live' }) === 'setup-error'
+  && resolveBackendMode({ backend: 'live', url: 'x' }) === 'setup-error'
+  && resolveBackendMode({ backend: 'live', anonKey: 'y' }) === 'setup-error'
+  && resolveBackendMode({ backend: 'live', url: 'x', anonKey: 'y' }) === 'live'
+  && resolveBackendMode({ backend: 'LIVE', url: 'x', anonKey: 'y' }) === 'live');
+const mig = readFileSync('supabase/migrations/20261014000001_reference_foundation.sql', 'utf8');
+check('migration creates reference schema with RLS',
+  mig.includes('create table if not exists public.business_units')
+  && mig.includes('create table if not exists public.staff')
+  && mig.includes('create table if not exists public.chart_of_accounts')
+  && (mig.match(/enable row level security/g) ?? []).length === 3
+  && mig.includes('units_read_all') && mig.includes('coa_read_all')
+  && mig.includes('staff_read_authenticated'));
+check('migration seeds canonical units, staff, chart (no secrets)',
+  BUSINESS_UNITS.length === 9 && BUSINESS_UNITS.every(u => mig.includes(`('${u}')`))
+  && STAFF.length === 7 && STAFF.every(s => mig.includes(`('${s.id}',`))
+  && (mig.match(/\('[0-9]{4}', '/g) ?? []).length === 17
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig));
+check('canonical mappings intact for linking',
+  STAFF.map(s => s.id).join() === 'joy,eve,dani,jeann,jinky,mae,rodel'
+  && roleKindFor('Warehouse') === 'warehouse'
+  && canVisit('Warehouse', '/admin/accounting') === false);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -7,6 +7,46 @@ import { monthRange } from '../data/close';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 import { PrintHead } from './Reports';
+import { fetchLiveReference, getSupabaseClient, readBackendEnv, resolveBackendMode, type LiveAccount } from '../data/backend';
+
+function ChartTab() {
+  const env = readBackendEnv();
+  const mode = resolveBackendMode(env);
+  const [live, setLive] = useState<LiveAccount[] | null>(null);
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (mode !== 'live' || !env.url || !env.anonKey) return;
+    setLoading(true);
+    fetchLiveReference(getSupabaseClient(env.url, env.anonKey))
+      .then(r => setLive(r.coa))
+      .catch((e: Error) => setError(e.message ?? 'Live read failed.'))
+      .finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode]);
+
+  if (mode === 'live') {
+    return (
+      <div className="card"><h3>Chart of Accounts (live reference data)</h3>
+        {loading && <p className="small muted">Loading from Supabase…</p>}
+        {error && <div className="warn">{error} Demo chart is not shown as a silent fallback.</div>}
+        {!loading && !error && live && (
+          live.length === 0
+            ? <p className="small muted">No accounts returned. Check seed migration on the project.</p>
+            : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Code</th><th>Account name</th><th>Type</th></tr></thead>
+              <tbody>{live.map(a => <tr key={a.code}><td><strong>{a.code}</strong></td><td>{a.name}</td><td><Pill status={a.type} /></td></tr>)}</tbody></table></div>
+        )}
+      </div>
+    );
+  }
+  return (
+    <div className="card"><h3>Chart of Accounts (demo structure — validate codes before production)</h3>
+      <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Code</th><th>Account name</th><th>Type</th></tr></thead>
+        <tbody>{COA.map(a => <tr key={a.code}><td><strong>{a.code}</strong></td><td>{a.name}</td><td><Pill status={a.type} /></td></tr>)}</tbody></table></div>
+    </div>
+  );
+}
 
 type Tab = 'coa' | 'gl' | 'ap' | 'ar' | 'bank' | 'audit';
 const TABS: Tab[] = ['coa', 'gl', 'ap', 'ar', 'bank', 'audit'];
@@ -55,12 +95,7 @@ export default function Accounting() {
           ))}
         </div>
       )}
-      {tab === 'coa' && (
-        <div className="card"><h3>Chart of Accounts (demo structure — validate codes before production)</h3>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Code</th><th>Account name</th><th>Type</th></tr></thead>
-            <tbody>{COA.map(a => <tr key={a.code}><td><strong>{a.code}</strong></td><td>{a.name}</td><td><Pill status={a.type} /></td></tr>)}</tbody></table></div>
-        </div>
-      )}
+      {tab === 'coa' && <ChartTab />}
       {tab === 'gl' && <GeneralLedger />}
       {tab === 'ap' && <PayableTable title="Accounts Payable — supplier billings" empty="No payables in demo set. P.O. receipts queue payables here for review." rows={ap} />}
       {tab === 'ar' && <PayableTable title="Accounts Receivable — amounts due (demo)" empty="No receivables in demo set — collection entries would appear here." rows={ar} client />}

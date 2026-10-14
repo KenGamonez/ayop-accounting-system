@@ -183,3 +183,6 @@ rules — never frontend-only:
 ## 9. Forensic-study addendum (2026-10-14)
 
 Pre-backend code trace at 44656ff produced docs/FRONTEND_WORKFLOW_SPEC.md (operation contracts, accounting-model gaps) and docs/REQUIREMENTS_TO_CODE_MATRIX.md (30-row evidence table). Key confirmations feeding the slices above: single-sided demo postings, presentation-only permissions, advisory close, no costing method, cash flow limited to explicit Cash In/Out kinds. No app code changed by the study.
+## 10. Slice 1 implementation record (2026-10-14)
+
+Project yop-accounting-system (	gokmcupkxvgsniljqpf, ap-southeast-1) created; supabase/migrations/20261014000001_reference_foundation.sql applied and verified (9 units, 7 staff unlinked, 17 COA, RLS on, read-only policies; anon reads units/COA, staff denied unauthenticated). Frontend: src/data/backend.ts boundary, Settings backend card, live COA reads, production env untouched (Demo). Remaining owner work: 7 Auth accounts + uth_user_id linking per docs/SLICE_1_SETUP.md. Next: Slice 2 per PROJECT_STATE.md.
