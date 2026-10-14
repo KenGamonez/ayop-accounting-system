@@ -26,10 +26,15 @@ export default function Transactions() {
     (!q || (t.item + t.supplier + t.id).toLowerCase().includes(q.toLowerCase()))
   ), [txns, fUnit, fClass, fStatus, q, mineOnly, user]);
 
-  const submit = () => {
+  const submit = async () => {
     if (!form.item.trim() || !form.supplier.trim()) { alert('Item and Supplier are required (staff terminology).'); return; }
     const amount = form.amount || form.supplierPrice * form.quantity;
-    addTxn({ ...form, classification: form.classification as never, kind: form.kind as never, amount, enteredBy: user?.name ?? 'Demo user' });
+    try {
+      await addTxn({ ...form, classification: form.classification as never, kind: form.kind as never, amount, enteredBy: user?.name ?? 'Demo user' });
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not save the transaction.');
+      return;
+    }
     setShow(false);
     setForm(f => ({ ...f, item: '', supplier: '', amount: 0, remarks: '' }));
   };
@@ -87,7 +92,7 @@ export default function Transactions() {
               <td>{t.businessUnit}</td><td>{t.classification}</td>
               <td><Pill status={t.status} /></td>
               <td className="num"><Money n={t.amount} /></td>
-              <td>{t.status === 'Draft' || t.status === 'Rejected' ? (canResubmit(user?.role ?? '', user?.id, t) ? <button className="btn small ghost" onClick={() => transition(t.id, 'For Accountant Review', undefined, user?.id)}>Resubmit</button> : <span className="small muted">Originator resubmits</span>) : <span className="small muted">In queue</span>}</td>
+              <td>{t.status === 'Draft' || t.status === 'Rejected' ? (canResubmit(user?.role ?? '', user?.id, t) ? <button className="btn small ghost" onClick={async () => { const r = await transition(t.id, 'For Accountant Review', undefined, user?.id); if (!r.ok) alert(r.message); }}>Resubmit</button> : <span className="small muted">Originator resubmits</span>) : <span className="small muted">In queue</span>}</td>
             </tr>
           ))}</tbody>
         </table></div>

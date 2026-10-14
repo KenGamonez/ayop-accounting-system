@@ -19,20 +19,20 @@ export default function Approval() {
   const shownQueue = mineOnly && user ? queue.filter(t => t.createdBy === user.id) : queue;
   const shownDone = mineOnly && user ? done.filter(t => t.createdBy === user.id) : done;
 
-  const act = (id: string, to: TxnStatus) => {
+  const act = async (id: string, to: TxnStatus) => {
     if (to === 'Rejected' && !note.trim()) {
       setFeedback({ ok: false, text: `Give a rejection reason for ${id} so staff know what to correct — nothing was changed.` });
       return;
     }
     if (to === 'Posted' && !confirm(`Post ${id} to the General Ledger? Posted entries lock and can only be corrected by reversal.`)) return;
-    const res = transition(id, to, note.trim() || `${to} by ${user?.name ?? 'demo'} (simulated — no backend enforcement)`, user?.id);
+    const res = await transition(id, to, note.trim() || `${to} by ${user?.name ?? 'demo'} (simulated — no backend enforcement)`, user?.id);
     setFeedback({ ok: res.ok, text: res.message });
     if (res.ok) setNote('');
   };
 
-  const reverse = (id: string) => {
+  const reverse = async (id: string) => {
     if (!confirm(`Record a reversal for posted entry ${id}? The original locks as Reversed and an offsetting entry queues for review.`)) return;
-    const res = reverseTxn(id);
+    const res = await reverseTxn(id);
     setFeedback({ ok: res.ok, text: res.message });
   };
 

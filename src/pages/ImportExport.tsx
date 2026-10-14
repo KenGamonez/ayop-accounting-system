@@ -204,26 +204,33 @@ function ImportWizard() {
     && (type !== 'opening_balances' || obTotals?.balanced)
     && ack;
 
-  const confirm = () => {
+  const confirm = async () => {
     const at = new Date().toLocaleString('en-PH');
     let imported = 0, skipped = nErr;
+    let firstError = '';
     const me = store.user?.name ?? 'Demo user';
     if (type === 'transactions') {
-      validated.forEach(r => {
-        if (r.errors.length) return;
-        if (r.duplicateOf && dupMode === 'skip') { skipped++; return; }
+      for (const r of validated) {
+        if (r.errors.length) continue;
+        if (r.duplicateOf && dupMode === 'skip') { skipped++; continue; }
         const d = r.data;
-        store.addTxn({
-          date: d.date as string, businessUnit: d.businessUnit as string,
-          classification: d.classification as never, kind: d.kind as never,
-          item: String(d.item), category: d.category as string, supplier: String(d.supplier),
-          supplierPrice: d.supplierPrice as number, retailPrice: d.retailPrice as number,
-          quantity: d.quantity as number, amount: d.amount as number,
-          accountCode: '5000', accountName: 'Medical Supplies Expense',
-          enteredBy: me, remarks: `Demo import from ${fileName_} — awaiting accountant review`,
-        });
-        imported++;
-      });
+        try {
+          await store.addTxn({
+            date: d.date as string, businessUnit: d.businessUnit as string,
+            classification: d.classification as never, kind: d.kind as never,
+            item: String(d.item), category: d.category as string, supplier: String(d.supplier),
+            supplierPrice: d.supplierPrice as number, retailPrice: d.retailPrice as number,
+            quantity: d.quantity as number, amount: d.amount as number,
+            accountCode: '5000', accountName: 'Medical Supplies Expense',
+            enteredBy: me, remarks: `Demo import from ${fileName_} — awaiting accountant review`,
+          });
+          imported++;
+        } catch (e) {
+          skipped++;
+          if (!firstError) firstError = e instanceof Error ? e.message : 'Row failed to save.';
+        }
+      }
+      if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'inventory') {
       validated.forEach(r => {

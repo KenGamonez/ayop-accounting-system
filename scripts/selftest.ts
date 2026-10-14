@@ -10,6 +10,7 @@ import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
+import { mapDbTxn, mapRpcError, membershipToStaff, toDbPayload, type DbTxnRow } from '../src/data/live.ts';
 import { readFileSync } from 'node:fs';
 import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
@@ -545,6 +546,54 @@ check('canonical mappings intact for linking',
   STAFF.map(s => s.id).join() === 'joy,eve,dani,jeann,jinky,mae,rodel'
   && roleKindFor('Warehouse') === 'warehouse'
   && canVisit('Warehouse', '/admin/accounting') === false);
+
+// ---- slice 2: live adapter, migration, server guards ----
+const mig2 = readFileSync('supabase/migrations/20261014000002_transactions_approvals.sql', 'utf8');
+check('slice-2 migration defines tables, matrix, RPCs, RLS (no direct writes)',
+  mig2.includes('create table if not exists public.transactions')
+  && mig2.includes('create table if not exists public.txn_transitions')
+  && mig2.includes('create table if not exists public.audit_events')
+  && mig2.includes('create or replace function public.create_transaction')
+  && mig2.includes('create or replace function public.transition_transaction')
+  && mig2.includes('create or replace function public.reverse_transaction')
+  && mig2.includes('for update')
+  && mig2.includes('txn_read_scoped') && mig2.includes('audit_read')
+  && !/create policy[^;]*for (insert|update|delete)/i.test(mig2)
+  && /grant execute on function public\.(create|transition_transaction|reverse_transaction)/.test(mig2)
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}/.test(mig2.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, '')));
+check('migration transition pairs mirror the frontend matrix',
+  Object.entries(ALLOWED_TRANSITIONS).every(([from, tos]) =>
+    (tos as string[]).every(to => mig2.includes(`('${from}', '${to}')`))));
+const dbRow = {
+  id: 'TXN-2026-0001', date: '2026-10-14', business_unit: 'Pharmacy',
+  classification: 'Revenue', kind: 'Cash In', item: 'Sales', category: 'Medical Supplies',
+  supplier: 'Walk-in', supplier_price: '160.5', retail_price: 220, quantity: '2',
+  amount: '321.00', account_code: '4100', account_name: 'Pharmacy Sales',
+  entered_by: 'Mae Sherylou', created_by: 'mae', status: 'Posted',
+  remarks: '', reversal_of: null,
+} as unknown as DbTxnRow;
+const mapped = mapDbTxn(dbRow);
+check('db row maps to Txn (numerics coerced, reversal cleared)',
+  mapped.businessUnit === 'Pharmacy' && mapped.supplierPrice === 160.5
+  && mapped.quantity === 2 && mapped.amount === 321 && mapped.reversalOf === undefined
+  && mapped.createdBy === 'mae');
+const payload = toDbPayload({
+  date: '2026-10-14', businessUnit: 'Pharmacy', classification: 'Revenue', kind: 'Cash In',
+  item: 'X', category: 'Medical Supplies', supplier: 'Y', supplierPrice: 1,
+  retailPrice: 2, quantity: 1, amount: 3, accountCode: '4100', accountName: 'N',
+  remarks: '',
+});
+check('db payload whitelists server-accepted fields only',
+  JSON.stringify(payload) === JSON.stringify({
+    date: '2026-10-14', business_unit: 'Pharmacy', classification: 'Revenue', kind: 'Cash In',
+    item: 'X', category: 'Medical Supplies', supplier: 'Y', supplier_price: 1,
+    retail_price: 2, quantity: 1, amount: 3, account_code: '4100', account_name: 'N', remarks: '',
+  }));
+check('rpc errors surface plain language',
+  mapRpcError({ message: 'SELF_APPROVAL: creators cannot approve' }) === 'creators cannot approve'
+  && mapRpcError(new Error('boom')) === 'boom');
+check('membership resolves to staff shape without name matching',
+  (() => { const s = membershipToStaff({ id: 'jeann', name: 'Jeann', role: 'Warehouse', unit: 'Central Warehouse' }); return s.id === 'jeann' && s.initials === 'J'; })());
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

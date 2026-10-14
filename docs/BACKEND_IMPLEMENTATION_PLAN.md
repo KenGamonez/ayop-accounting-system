@@ -186,3 +186,6 @@ Pre-backend code trace at 44656ff produced docs/FRONTEND_WORKFLOW_SPEC.md (opera
 ## 10. Slice 1 implementation record (2026-10-14)
 
 Project yop-accounting-system (	gokmcupkxvgsniljqpf, ap-southeast-1) created; supabase/migrations/20261014000001_reference_foundation.sql applied and verified (9 units, 7 staff unlinked, 17 COA, RLS on, read-only policies; anon reads units/COA, staff denied unauthenticated). Frontend: src/data/backend.ts boundary, Settings backend card, live COA reads, production env untouched (Demo). Remaining owner work: 7 Auth accounts + uth_user_id linking per docs/SLICE_1_SETUP.md. Next: Slice 2 per PROJECT_STATE.md.
+## 11. Slice 2 implementation record (2026-10-14)
+
+Migration 20261014000002 applied and catalog-verified (transactions + transition matrix + audit + create/transition/reverse RPCs, scoped RLS, authenticated-only EXECUTE; 0 live rows). Frontend live adapter, live login, and async store delegation implemented with demo behavior byte-identical by default. Provisioning (0/7 linked) still blocks e2e verification and any live activation. Next: Slice 3 per PROJECT_STATE.md.

@@ -22,7 +22,7 @@ export default function Disbursement() {
   ), [txns, unit, from, to, rangeErr]);
   const postedTotal = rows.filter(t => t.status === 'Posted').reduce((s, t) => s + t.amount, 0);
 
-  const submit = () => {
+  const submit = async () => {
     const amount = form.amount.trim() === '' ? null : Number(form.amount);
     const v = validateDisbursement({
       date: form.date, businessUnit: form.businessUnit, particulars: form.particulars,
@@ -31,15 +31,21 @@ export default function Disbursement() {
     setErrs(v);
     if (v.length) { setSaved(''); return; }
     const acct = COA.find(c => c.code === form.accountCode);
-    const txn = addTxn({
-      date: form.date, businessUnit: form.businessUnit, classification: 'Expense', kind: 'Disbursement',
-      item: form.particulars.trim(), category: 'Medical Supplies', supplier: form.supplier.trim(),
-      supplierPrice: amount ?? 0, retailPrice: 0, quantity: 1, amount: amount ?? 0,
-      accountCode: form.accountCode, accountName: acct?.name ?? '',
-      enteredBy: user?.name ?? 'Demo user',
-      remarks: `Disbursement entry — queued for accountant review, not posted`,
-    });
-    setSaved(`${txn.id} saved and queued for accountant review. It will not post until approved.`);
+    try {
+      const txn = await addTxn({
+        date: form.date, businessUnit: form.businessUnit, classification: 'Expense', kind: 'Disbursement',
+        item: form.particulars.trim(), category: 'Medical Supplies', supplier: form.supplier.trim(),
+        supplierPrice: amount ?? 0, retailPrice: 0, quantity: 1, amount: amount ?? 0,
+        accountCode: form.accountCode, accountName: acct?.name ?? '',
+        enteredBy: user?.name ?? 'Demo user',
+        remarks: `Disbursement entry — queued for accountant review, not posted`,
+      });
+      setSaved(`${txn.id} saved and queued for accountant review. It will not post until approved.`);
+    } catch (e) {
+      setSaved('');
+      setErrs([e instanceof Error ? e.message : 'Could not save the disbursement.']);
+      return;
+    }
     setForm(f => ({ ...f, particulars: '', supplier: '', amount: '' }));
     setShow(false);
   };

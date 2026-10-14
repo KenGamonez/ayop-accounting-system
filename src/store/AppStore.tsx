@@ -1,6 +1,16 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AuditEvent, COA, InventoryItem, JournalEntry, PurchaseOrder, Staff, STAFF, Txn, TxnStatus, seedAudit, seedInventory, seedJournal, seedPOs, seedTransactions } from '../data/seed';
 import { applyReceipt, defaultInventoryTypeFor, guardTransition, isAllowed, nextTxnId, staffIdForName } from '../data/ops';
+import { getSupabaseClient, readBackendEnv, resolveBackendMode } from '../data/backend';
+import {
+  createLiveTxn, listLiveTxns, mapRpcError, membershipToStaff, resolveLiveMembership,
+  reverseLiveTxn, signInLive, signOutLive, transitionLiveTxn,
+  type LiveMembership, type TxnDraft,
+} from '../data/live';
+
+const ENV = readBackendEnv();
+const LIVE_MODE = resolveBackendMode(ENV) === 'live';
+const SETUP_ERROR = resolveBackendMode(ENV) === 'setup-error';
 
 // Older demo state saved P.O. lines without receivedQty — backfill so the
 // receipt workflow degrades gracefully instead of crashing or double-counting.
@@ -15,10 +25,18 @@ interface Store {
   user: Staff | null;
   login: (id: string) => void;
   logout: () => void;
+  /** Backend posture: demo (local), live (Supabase), or setup-error (misconfigured live). */
+  mode: 'demo' | 'live' | 'setup-error';
+  /** Live-mode membership resolved from the signed-in session; null until linked sign-in. */
+  liveStaff: LiveMembership | null;
+  liveError: string;
+  liveLogin: (email: string, password: string) => Promise<{ ok: boolean; message: string }>;
+  liveLogout: () => Promise<void>;
+  refreshLiveTxns: () => Promise<void>;
   txns: Txn[];
-  addTxn: (t: Omit<Txn, 'id' | 'status'>) => Txn;
-  transition: (id: string, to: TxnStatus, note?: string, actorId?: string) => { ok: boolean; message: string };
-  reverseTxn: (id: string) => { ok: boolean; message: string };
+  addTxn: (t: Omit<Txn, 'id' | 'status'>) => Promise<Txn>;
+  transition: (id: string, to: TxnStatus, note?: string, actorId?: string) => Promise<{ ok: boolean; message: string }>;
+  reverseTxn: (id: string) => Promise<{ ok: boolean; message: string }>;
   inventory: InventoryItem[];
   adjustInventory: (id: string, delta: number, reason?: string) => void;
   setInventoryQty: (id: string, qty: number, reason?: string) => void;
@@ -28,9 +46,9 @@ interface Store {
   addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>) => void;
   sendPO: (id: string) => void;
   cancelPO: (id: string) => void;
-  receivePOLine: (id: string, lineIdx: number, qty: number) => { ok: boolean; message: string };
+  receivePOLine: (id: string, lineIdx: number, qty: number) => Promise<{ ok: boolean; message: string }>;
   journal: JournalEntry[];
-  queueJournal: (id: string) => { ok: boolean; message: string };
+  queueJournal: (id: string) => Promise<{ ok: boolean; message: string }>;
   addJournal: (j: Omit<JournalEntry, 'id'>) => void;
   audit: AuditEvent[];
   log: (action: string, ref: string, detail: string) => void;
@@ -49,11 +67,15 @@ function load<T>(k: string, fb: T): T {
 }
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
-  const [userId, setUserId] = useState<string | null>(() => load('user', null as string | null));
-  const [txns, setTxns] = useState<Txn[]>(() => load('txns', seedTransactions).map(t => ({
-    ...t,
-    createdBy: t.createdBy ?? staffIdForName(t.enteredBy) ?? undefined,
-  })));
+  const [userId, setUserId] = useState<string | null>(() => (LIVE_MODE ? null : load('user', null as string | null)));
+  const [txns, setTxns] = useState<Txn[]>(() => (LIVE_MODE
+    ? []
+    : load('txns', seedTransactions).map(t => ({
+      ...t,
+      createdBy: t.createdBy ?? staffIdForName(t.enteredBy) ?? undefined,
+    }))));
+  const [liveStaff, setLiveStaff] = useState<LiveMembership | null>(null);
+  const [liveError, setLiveError] = useState('');
   const [inventory, setInventory] = useState<InventoryItem[]>(() => load('inv', seedInventory));
   const [pos, setPos] = useState<PurchaseOrder[]>(() => load('pos', seedPOs).map(normalizePO));
   const [journal, setJournal] = useState<JournalEntry[]>(() => load('je', seedJournal));
@@ -61,8 +83,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
-      localStorage.setItem(KEY + ':user', JSON.stringify(userId));
-      localStorage.setItem(KEY + ':txns', JSON.stringify(txns));
+      if (!LIVE_MODE) localStorage.setItem(KEY + ':user', JSON.stringify(userId));
+      // Live transactions are never written to localStorage: demo and live
+      // records must not mix invisibly.
+      if (!LIVE_MODE) localStorage.setItem(KEY + ':txns', JSON.stringify(txns));
       localStorage.setItem(KEY + ':inv', JSON.stringify(inventory));
       localStorage.setItem(KEY + ':pos', JSON.stringify(pos));
       localStorage.setItem(KEY + ':je', JSON.stringify(journal));
@@ -70,7 +94,64 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     } catch { /* private mode */ }
   }, [userId, txns, inventory, pos, journal, audit]);
 
-  const user = useMemo(() => STAFF.find(s => s.id === userId) ?? null, [userId]);
+  const liveClient = () => getSupabaseClient(ENV.url ?? '', ENV.anonKey ?? '');
+
+  const refreshLiveTxns = async () => {
+    const rows = await listLiveTxns(liveClient());
+    setTxns(rows);
+  };
+
+  // Live session → linked membership. Runs only in live mode.
+  useEffect(() => {
+    if (!LIVE_MODE) return;
+    let cancelled = false;
+    liveClient().auth.getSession().then(async ({ data: { session } }) => {
+      if (cancelled) return;
+      if (!session) return;
+      try {
+        const m = await resolveLiveMembership(liveClient());
+        if (cancelled) return;
+        if (!m) {
+          setLiveError('Signed in, but this login is not linked to a staff record. Ask an administrator to link it (docs/SLICE_1_SETUP.md §3).');
+          return;
+        }
+        setLiveStaff(m);
+        setLiveError('');
+        setTxns(await listLiveTxns(liveClient()));
+      } catch (e) {
+        if (!cancelled) setLiveError(e instanceof Error ? e.message : 'Live load failed.');
+      }
+    });
+    const { data: { subscription } } = liveClient().auth.onAuthStateChange(async (_event, session) => {
+      if (cancelled) return;
+      if (!session) {
+        setLiveStaff(null);
+        setTxns([]);
+        return;
+      }
+      try {
+        const m = await resolveLiveMembership(liveClient());
+        if (cancelled) return;
+        if (!m) {
+          setLiveStaff(null);
+          setLiveError('Signed in, but this login is not linked to a staff record. Ask an administrator to link it (docs/SLICE_1_SETUP.md §3).');
+          return;
+        }
+        setLiveStaff(m);
+        setLiveError('');
+        setTxns(await listLiveTxns(liveClient()));
+      } catch (e) {
+        if (!cancelled) setLiveError(e instanceof Error ? e.message : 'Live load failed.');
+      }
+    });
+    return () => { cancelled = true; subscription.unsubscribe(); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const user = useMemo(() => {
+    if (LIVE_MODE) return liveStaff ? membershipToStaff(liveStaff) : null;
+    return STAFF.find(s => s.id === userId) ?? null;
+  }, [liveStaff, userId]);
 
   const log = (action: string, ref: string, detail: string) => {
     const actor = user?.name ?? 'Demo user';
@@ -79,19 +160,95 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     setAudit(a => [{ id: 'A-' + Date.now(), at, actor, action, ref, detail }, ...a].slice(0, 200));
   };
 
+  // Narrow a frontend transaction to the server-accepted draft shape.
+  const toDraft = (t: Omit<Txn, 'id' | 'status'>): TxnDraft => ({
+    date: t.date,
+    businessUnit: t.businessUnit,
+    classification: t.classification,
+    kind: t.kind,
+    item: t.item,
+    category: t.category,
+    supplier: t.supplier,
+    supplierPrice: t.supplierPrice,
+    retailPrice: t.retailPrice,
+    quantity: t.quantity,
+    amount: t.amount,
+    accountCode: t.accountCode,
+    accountName: t.accountName,
+    remarks: t.remarks,
+  });
+
+  const refreshLiveTxnsSafe = async () => {
+    try {
+      setTxns(await listLiveTxns(liveClient()));
+    } catch (e) {
+      setLiveError(e instanceof Error ? e.message : 'Live refresh failed.');
+    }
+  };
+
+  /** Persist a system-generated transaction (receipt payable, journal queue). */
+  const persistTxn = async (t: Omit<Txn, 'id' | 'status'>): Promise<Txn> => {
+    if (!LIVE_MODE) throw new Error('persistTxn is live-only.');
+    if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+    const created = await createLiveTxn(liveClient(), toDraft(t), `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+    await refreshLiveTxnsSafe();
+    return created;
+  };
+
   const value: Store = {
     user,
     login: (id) => setUserId(id),
     logout: () => setUserId(null),
+    mode: SETUP_ERROR ? 'setup-error' : LIVE_MODE ? 'live' : 'demo',
+    liveStaff,
+    liveError,
+    liveLogin: async (email, password) => {
+      if (!LIVE_MODE || !ENV.url || !ENV.anonKey) return { ok: false, message: 'Live backend is not configured.' };
+      try {
+        const m = await signInLive(ENV.url, ENV.anonKey, email, password);
+        setLiveStaff(m);
+        setLiveError('');
+        setTxns(await listLiveTxns(liveClient()));
+        return { ok: true, message: `Signed in as ${m.name} (${m.role}).` };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : 'Sign-in failed.';
+        setLiveError(message);
+        return { ok: false, message };
+      }
+    },
+    liveLogout: async () => {
+      if (LIVE_MODE && ENV.url && ENV.anonKey) await signOutLive(ENV.url, ENV.anonKey);
+      setLiveStaff(null);
+      setTxns([]);
+    },
+    refreshLiveTxns: async () => {
+      if (!LIVE_MODE) return;
+      setTxns(await listLiveTxns(liveClient()));
+    },
     txns,
-    addTxn: (t) => {
+    addTxn: async (t) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        const created = await createLiveTxn(liveClient(), toDraft(t), `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        await refreshLiveTxnsSafe();
+        return created;
+      }
       const txn: Txn = { ...t, createdBy: user?.id, id: nextTxnId(txns.map(x => x.id)), status: 'For Accountant Review' };
       setTxns(x => [txn, ...x]);
       const actor = STAFF.find(s => s.name === t.enteredBy)?.name ?? t.enteredBy;
       setAudit(a => [{ id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'Created transaction', ref: txn.id, detail: t.item }, ...a]);
       return txn;
     },
-    transition: (id, to, note, actorId) => {
+    transition: async (id, to, note, actorId) => {
+      if (LIVE_MODE) {
+        try {
+          await transitionLiveTxn(liveClient(), id, to, note);
+          await refreshLiveTxnsSafe();
+          return { ok: true, message: `${id}: ${to} (live).` };
+        } catch (e) {
+          return { ok: false, message: e instanceof Error ? e.message : 'Live transition failed.' };
+        }
+      }
       const cur = txns.find(t => t.id === id);
       if (!cur) return { ok: false, message: `Transaction ${id} not found — no change made.` };
       const blocked = guardTransition(cur, to, actorId);
@@ -112,7 +269,16 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       log(labels[to] ?? to, id, note ?? '');
       return { ok: true, message: `${id}: ${labels[to] ?? to}.` };
     },
-    reverseTxn: (id) => {
+    reverseTxn: async (id) => {
+      if (LIVE_MODE) {
+        try {
+          const rev = await reverseLiveTxn(liveClient(), id);
+          await refreshLiveTxnsSafe();
+          return { ok: true, message: `${id} locked as Reversed. Offsetting entry ${rev.id} queued for accountant review (live).` };
+        } catch (e) {
+          return { ok: false, message: e instanceof Error ? e.message : 'Live reversal failed.' };
+        }
+      }
       const cur = txns.find(t => t.id === id);
       if (!cur) return { ok: false, message: `Transaction ${id} not found — no change made.` };
       if (cur.status !== 'Posted') return { ok: false, message: `Only Posted entries can be reversed (${id} is ${cur.status}).` };
@@ -178,7 +344,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const po = pos.find(p => p.id === id);
       if (po) log('P.O. cancelled', po.poNo, 'Outstanding lines voided · demo only');
     },
-    receivePOLine: (id, lineIdx, qty) => {
+    receivePOLine: async (id, lineIdx, qty) => {
       const po = pos.find(p => p.id === id);
       if (!po) return { ok: false, message: 'Purchase order not found.' };
       const today = new Date().toISOString().slice(0, 10);
@@ -188,6 +354,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setPos(x => x.map(p => (p.id === id ? res.po : p)));
       // Receiving updates physical stock AND queues a pending payable for
       // accountant review — it never posts to the ledger directly.
+      // Slice 2 scope: the payable goes live; P.O./inventory state stays
+      // demo-local (said explicitly in the result message, never silently).
       const match = inventory.find(i =>
         i.businessUnit === po.businessUnit && i.item.toLowerCase() === line.item.toLowerCase());
       if (match) {
@@ -206,28 +374,39 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         };
         setInventory(x => [rec, ...x]);
       }
-      const txn: Txn = {
-        id: nextTxnId(txns.map(x => x.id)),
-        date: today, businessUnit: po.businessUnit, classification: 'Liability',
-        kind: 'Journal', item: `Supplier billing — ${po.poNo} (${line.item} × ${res.receivedQty})`,
+      const draft = {
+        date: today, businessUnit: po.businessUnit, classification: 'Liability' as const,
+        kind: 'Journal' as const, item: `Supplier billing — ${po.poNo} (${line.item} × ${res.receivedQty})`,
         category: 'Medical Supplies', supplier: po.supplier,
         supplierPrice: line.supplierPrice, retailPrice: 0, quantity: res.receivedQty,
         amount: res.receivedValue, accountCode: '2000', accountName: 'Accounts Payable',
-        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review',
+        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review' as const,
         remarks: `Auto-queued from P.O. receipt ${po.poNo} — awaiting accountant review, not posted`,
       };
-      setTxns(x => [txn, ...x]);
+      let txnId: string;
+      if (LIVE_MODE) {
+        try {
+          const created = await persistTxn(draft);
+          txnId = created.id;
+        } catch (e) {
+          return { ok: false, message: e instanceof Error ? e.message : 'Live payable queueing failed.' };
+        }
+      } else {
+        const txn: Txn = { ...draft, id: nextTxnId(txns.map(x => x.id)) };
+        setTxns(x => [txn, ...x]);
+        txnId = txn.id;
+      }
       const actor = user?.name ?? 'Demo user';
       setAudit(a => [
-        { id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'P.O. receipt recorded', ref: po.poNo, detail: `${line.item} × ${res.receivedQty} received; stock updated; ${txn.id} queued for review` },
+        { id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'P.O. receipt recorded', ref: po.poNo, detail: `${line.item} × ${res.receivedQty} received; stock updated; ${txnId} queued for review` },
       ...a].slice(0, 200));
       return {
         ok: true,
-        message: `Received ${res.receivedQty} × ${line.item} — stock updated, ${txn.id} queued for accountant review${res.fullyReceived ? '; order fully received' : ''}.`,
+        message: `Received ${res.receivedQty} × ${line.item} — stock updated, ${txnId} queued for accountant review${res.fullyReceived ? '; order fully received' : ''}.${LIVE_MODE ? ' (Payable is live; P.O./inventory stay demo-local in Slice 2.)' : ''}`,
       };
     },
     journal,
-    queueJournal: (id) => {
+    queueJournal: async (id) => {
       const j = journal.find(x => x.id === id);
       if (!j) return { ok: false, message: 'Journal entry not found — no change made.' };
       if (j.status !== 'Draft') return { ok: false, message: `${j.ref} is already ${j.status} — repeated action ignored.` };
@@ -236,19 +415,29 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const code = (j.debitAccount.split('—')[0] ?? j.debitAccount.split('-')[0] ?? '').trim();
       const acct = COA.find(c => c.code === code);
       const cls = (acct && ['Expense', 'Revenue', 'Asset', 'Liability'].includes(acct.type) ? acct.type : 'Asset') as Txn['classification'];
-      const txn: Txn = {
-        id: nextTxnId(txns.map(x => x.id)),
-        date: j.date, businessUnit: j.businessUnit, classification: cls, kind: 'Journal',
+      const draft = {
+        date: j.date, businessUnit: j.businessUnit, classification: cls, kind: 'Journal' as const,
         item: j.particulars, category: 'Medical Supplies', supplier: '—',
         supplierPrice: 0, retailPrice: 0, quantity: 1, amount: j.amount,
         accountCode: code || '5000', accountName: acct?.name ?? j.debitAccount,
-        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review',
+        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review' as const,
         remarks: `Queued from journal draft ${j.ref} — needs accountant review, not posted`,
       };
-      setTxns(x => [txn, ...x]);
-      setJournal(x => x.map(xj => (xj.id === id ? { ...xj, queuedTxn: txn.id } : xj)));
-      log('Journal draft queued for review', j.ref, `Queued as ${txn.id}; draft stays unposted until approved`);
-      return { ok: true, message: `${j.ref} queued as ${txn.id} for accountant review. The draft stays unposted.` };
+      let txnId: string;
+      if (LIVE_MODE) {
+        try {
+          txnId = (await persistTxn(draft)).id;
+        } catch (e) {
+          return { ok: false, message: e instanceof Error ? e.message : 'Live journal queueing failed.' };
+        }
+      } else {
+        const txn: Txn = { ...draft, id: nextTxnId(txns.map(x => x.id)) };
+        setTxns(x => [txn, ...x]);
+        txnId = txn.id;
+      }
+      setJournal(x => x.map(xj => (xj.id === id ? { ...xj, queuedTxn: txnId } : xj)));
+      log('Journal draft queued for review', j.ref, `Queued as ${txnId}; draft stays unposted until approved`);
+      return { ok: true, message: `${j.ref} queued as ${txnId} for accountant review. The draft stays unposted.` };
     },
     addJournal: (j) => {
       const rec = { ...j, id: 'JE-' + Date.now() };

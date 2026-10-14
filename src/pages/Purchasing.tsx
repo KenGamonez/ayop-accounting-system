@@ -41,10 +41,10 @@ export default function Purchasing() {
     setFeedback({ ok: true, text: `${poNo} saved as Draft. Send it to the supplier when ready — receipts are recorded per line.` });
   };
 
-  const receipt = (poId: string, lineIdx: number) => {
+  const receipt = async (poId: string, lineIdx: number) => {
     const key = poId + ':' + lineIdx;
     const qty = Number(qtyByLine[key] ?? '');
-    const res = receivePOLine(poId, lineIdx, qty);
+    const res = await receivePOLine(poId, lineIdx, qty);
     setFeedback({ ok: res.ok, text: res.message });
     if (res.ok) setQtyByLine(q => ({ ...q, [key]: '' }));
   };

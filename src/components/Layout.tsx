@@ -78,7 +78,7 @@ function Row({ item, path, onNav }: { item: Item; path: string; onNav: () => voi
 }
 
 export default function Layout() {
-  const { user, logout } = useStore();
+  const { user, logout, mode, liveLogout } = useStore();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
   const loc = useLocation();
@@ -100,7 +100,7 @@ export default function Layout() {
         <nav className="nav">
           {items.map(n => <Row key={n.to + n.label} item={n} path={path} onNav={close} />)}
         </nav>
-        <div className="side-foot">Frontend demo · synthetic data only.<br />No backend connected.</div>
+        <div className="side-foot">{mode === 'live' ? <>Live Supabase backend · transactions + approvals.<br />Inventory/POs/journal stay demo-local.</> : <>Frontend demo · synthetic data only.<br />No backend connected.</>}</div>
       </aside>
       <div className="main">
         <div className="topbar">
@@ -113,13 +113,26 @@ export default function Layout() {
             </div>
           </div>
           <div style={{ marginLeft: 'auto' }} className="btn-row">
+            <span className={'pill ' + (mode === 'live' ? 'p-posted' : mode === 'setup-error' ? 'p-review' : 'p-draft')} title={mode === 'demo' ? 'Local synthetic data only' : mode === 'live' ? 'Live Supabase records' : 'Live selected but misconfigured'}>
+              {mode === 'demo' ? 'Demo' : mode === 'live' ? 'Live' : 'Setup needed'}
+            </span>
             <button className="btn ghost small" onClick={() => nav('/admin/approval')}>Approvals</button>
-            <button className="btn ghost small" onClick={() => { logout(); nav('/admin/login'); }}>Switch staff</button>
+            <button className="btn ghost small" onClick={() => { if (mode === 'live') { void liveLogout().then(() => nav('/admin/login')); } else { logout(); nav('/admin/login'); } }}>Switch staff</button>
           </div>
         </div>
+        {mode === 'demo' && (
         <div className="demo-banner">
           Demonstration environment — all figures are <strong>synthetic</strong> and require accounting validation before production use. Pending transactions are not posted.
         </div>
+        )}
+        {mode === 'live' && (
+        <div className="demo-banner" style={{ background: '#e6f4ec', borderColor: '#bfe3cd', color: '#157347' }}>
+          <strong>Live mode</strong> — transaction records come from the shared Supabase backend. Inventory, purchasing, and journal drafts remain demo-local in Slice 2.
+        </div>
+        )}
+        {mode === 'setup-error' && (
+        <div className="warn" style={{ margin: '8px 22px 0' }}>Live backend is selected but misconfigured (missing project URL or key). Running on demo data — nothing switched silently. See docs/SLICE_1_SETUP.md.</div>
+        )}
         <div className="content">
           <Outlet />
         </div>

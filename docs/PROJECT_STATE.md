@@ -28,14 +28,29 @@ Condition/Balance Sheet/Cash Flow statements with print styles, month-end
 close checklist, bank-rec worksheet, audit-trail preview. Pure logic under
 `src/data/` covered by `scripts/selftest.ts` (107 checks), `tsc`, prod build.
 
-## Backend capabilities actually verified (Slice 1, 2026-10-14)
+## Backend capabilities actually verified (Slice 2, 2026-10-14)
 
-Dedicated project `ayop-accounting-system` with reference tables, seeds,
-and RLS (verified live). Demo/live boundary + live reference reads in
-`src/data/backend.ts` (verified locally; production intentionally Demo).
-No transaction writes, no Auth accounts yet — owner provisioning pending.
+Reference foundation (Slice 1) plus: `transactions`, `txn_transitions`
+(12 pairs mirroring the frontend matrix), `audit_events` tables; atomic
+RPCs `create_transaction`, `transition_transaction`, `reverse_transaction`
+(all SECURITY DEFINER, EXECUTE to authenticated only — verified in
+catalog); SELECT-only RLS (`txn_read_scoped`: warehouse sees own rows,
+other linked roles consolidated; transitions/audit readable; zero direct
+write policies). Live transactions table holds 0 rows (no fake data).
+Frontend: `src/data/live.ts` adapter (session → membership, whitelisted
+payloads, RPC wrappers), live email/password login, store delegation for
+add/transition/reverse/receipt-queue/journal-queue with explicit Slice-2
+demo scoping notes, mode badge. Verified locally: `tsc`, build, selftests
+117/117, preview routes. NOT verified: end-to-end live authorization —
+0 of 7 staff Auth accounts linked (owner action pending), so live paths
+are code-complete but unexercised against real sessions. Production has no
+backend env vars and stays in Demo mode.
 
 ## Standing decisions and blockers
+
+- PROVISIONING BLOCKER (unchanged): 7 staff Auth accounts + `auth_user_id`
+  linking per `docs/SLICE_1_SETUP.md` §3. Until verified, no live
+  activation anywhere.
 
 ## Standing decisions and blockers
 
@@ -55,12 +70,13 @@ invariants, tests, backup) and this state file.
 
 ## Exactly one next task
 
-**Slice 2 — Transactions + approval chain on the live backend**
-(requires Slice 1 staff provisioning confirmed first). Acceptance: server
-transition RPC with creator/self-approval guards + row locking; RLS per
-role; frontend writes through RPC with demo fallback intact; concurrency
-and guard tests green; docs updated. Do not start until provisioning
-(`docs/SLICE_1_SETUP.md` §3) is verified complete.
+**Slice 3 — Double-entry core** (requires Slice 1 staff provisioning
+verified complete first, so live authorization can finally be exercised
+end-to-end). Acceptance: `journal_entries` + `journal_lines` with balance
+CHECK; atomic `post_entry` RPC; GL/TB/statements sourced from posted
+lines; accountant-approved mapping from the single-sided demo model;
+migration + RLS + concurrency tests green; docs updated. Do not start
+until provisioning (`docs/SLICE_1_SETUP.md` §3) is verified complete.
 
 ## Progress log
 
@@ -85,3 +101,4 @@ and guard tests green; docs updated. Do not start until provisioning
   + linking remains an owner action (`docs/SLICE_1_SETUP.md`). Production
   has no backend env vars and stays in Demo. Next: Slice 2 (transactions
   + approval chain) after provisioning is confirmed.
+- 2026-10-14 � Slice 2 (live transactions + approvals): Gate 0 confirmed HEAD 213fb9e clean, project tgokmcupkxvgsniljqpf, 0/7 staff linked (blocker stands). Applied versioned migration 20261014000002 (transactions + 12-pair matrix + append-only audit + 3 atomic RPCs + scoped RLS, EXECUTE authenticated-only � all catalog-verified; live transactions table holds 0 rows). Built live adapter (src/data/live.ts: session?membership, whitelisted payloads, RPC wrappers), live email login, async store delegation for add/transition/reverse/receipt/journal-queue with explicit Slice-2 demo scoping, mode badge. Selftests 117/117, tsc + build green. e2e live authorization NOT verified (no linked sessions exist). Production stays Demo (no env vars). Next: Slice 3 after provisioning is confirmed.

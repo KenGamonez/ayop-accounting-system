@@ -21,8 +21,8 @@ export default function Journal() {
   const drafts = rows.filter(j => j.status === 'Draft');
   const totals = journalTotals(lines);
 
-  const queue = (id: string) => {
-    const res = queueJournal(id);
+  const queue = async (id: string) => {
+    const res = await queueJournal(id);
     setFeedback({ ok: res.ok, text: res.message });
   };
 
