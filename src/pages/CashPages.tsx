@@ -33,9 +33,6 @@ function KindPage({ kind, title, sub }: { kind: string; title: string; sub: stri
   );
 }
 
-export function Disbursement() {
-  return <KindPage kind="Disbursement" title="Disbursement" sub="Supplier payments and operating pay-outs. Staff fields: Item, Supplier, Supplier Price, delivery / receipt references." />;
-}
 export function CashIn() {
   return <KindPage kind="Cash In" title="Cash In" sub="Cash collections — pharmacy sales, diagnostics, gym, reimbursements. Entered by cashiers; verified by accounting." />;
 }

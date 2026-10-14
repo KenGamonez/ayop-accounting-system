@@ -11,8 +11,6 @@ export const NAV: Item[] = [
     to: '/admin/transaction', label: 'Transaction', subs: [
       { to: '/admin/transaction', label: 'New Entry / All Transactions' },
       { to: '/admin/transaction-types', label: 'Type & Classification' },
-      { to: '/admin/cash-in', label: 'Cash In' },
-      { to: '/admin/cash-out', label: 'Cash Out' },
       { to: '/admin/disbursement', label: 'Disbursement' },
       { to: '/admin/journal', label: 'Journal' },
     ],

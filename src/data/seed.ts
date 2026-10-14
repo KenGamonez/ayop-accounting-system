@@ -99,6 +99,13 @@ export interface PurchaseOrder {
   status: 'Draft' | 'Sent to Supplier' | 'Partially Received' | 'Received' | 'Cancelled';
 }
 
+export interface JournalLine {
+  accountCode: string;
+  accountName: string;
+  debit: number;
+  credit: number;
+}
+
 export interface JournalEntry {
   id: string;
   date: string;
@@ -111,6 +118,8 @@ export interface JournalEntry {
   status: 'Draft' | 'Posted';
   sourceTxn: string;
   queuedTxn?: string;
+  /** Multi-line breakdown for guided entries; summary fields stay compatible. */
+  lines?: JournalLine[];
 }
 
 export interface AuditEvent {

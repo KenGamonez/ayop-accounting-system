@@ -1,7 +1,9 @@
 // Frontend self-test for import/export logic. Run: node scripts/selftest.ts
 import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
-import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed, nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS } from '../src/data/ops.ts';
+import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed,
+nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS, validateDisbursement, inDateRange,
+dateRangeError, journalTotals, validateJournal } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA } from '../src/data/seed.ts';
@@ -298,6 +300,47 @@ check('sidebar: GL kept, five links removed, routes untouched',
   && !acctSubs.includes('Accounts Receivable') && !acctSubs.includes('Bank Reconciliation')
   && !acctSubs.includes('Audit Trail')
   && acctSubs.includes('Trial Balance') && acctSubs.includes('Month-End Close'), acctSubs);
+const txnSubs = (NAV.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.label);
+check('sidebar: Cash In/Out out of Transaction menu, Type & Classification kept',
+  !txnSubs.includes('Cash In') && !txnSubs.includes('Cash Out')
+  && txnSubs.includes('Type & Classification') && txnSubs.includes('Disbursement') && txnSubs.includes('Journal'), txnSubs);
+
+// ---- disbursement entry + date-range search ----
+const goodDis = { date: '2026-10-14', businessUnit: 'Diagnostic Center', particulars: 'Bond paper', supplier: 'PaperLine', accountCode: '5100', amount: 3250 };
+check('disbursement valid passes', validateDisbursement(goodDis).length === 0);
+check('disbursement required fields + amount rules',
+  validateDisbursement({ ...goodDis, date: '' }).some(m => /Date is required/.test(m))
+  && validateDisbursement({ ...goodDis, particulars: '  ' }).some(m => /Particulars/.test(m))
+  && validateDisbursement({ ...goodDis, supplier: '' }).some(m => /Supplier/.test(m))
+  && validateDisbursement({ ...goodDis, amount: 0 }).some(m => /greater than zero/.test(m))
+  && validateDisbursement({ ...goodDis, amount: -5 }).some(m => /greater than zero/.test(m))
+  && validateDisbursement({ ...goodDis, amount: null }).some(m => /must be a number/.test(m))
+  && validateDisbursement({ ...goodDis, date: '2026-13-40' }).some(m => /real calendar date/.test(m))
+  && validateDisbursement({ ...goodDis, accountCode: '9999' }).some(m => /Chart of Accounts/.test(m))
+  && validateDisbursement({ ...goodDis, businessUnit: 'Nope' }).some(m => /nine Ayop units/.test(m)));
+check('date range inclusive + open-ended',
+  inDateRange('2026-10-01', '2026-10-01', '2026-10-31') && inDateRange('2026-10-31', '2026-10-01', '2026-10-31')
+  && !inDateRange('2026-09-30', '2026-10-01', '2026-10-31') && !inDateRange('2026-11-01', '2026-10-01', '2026-10-31')
+  && inDateRange('2026-01-01', '', '') && inDateRange('2026-12-31', '2026-10-01', ''));
+check('invalid range explained', dateRangeError('2026-10-31', '2026-10-01') !== null
+  && dateRangeError('2026-10-01', '2026-10-31') === null && dateRangeError('', '') === null);
+
+// ---- guided journal ----
+const jGood = { date: '2026-10-14', particulars: 'Correction', businessUnit: 'Pharmacy', lines: [
+  { accountCode: '5100', debit: 500, credit: null }, { accountCode: '1000', debit: null, credit: 500 } ] };
+check('journal totals', (() => { const t = journalTotals(jGood.lines); return t.debit === 500 && t.credit === 500 && t.balanced; })());
+check('journal valid passes', Object.keys(validateJournal(jGood)).length === 0, validateJournal(jGood));
+check('journal blocks missing/invalid input',
+  validateJournal({ ...jGood, date: '' }).date !== undefined
+  && validateJournal({ ...jGood, particulars: ' ' }).particulars !== undefined
+  && validateJournal({ ...jGood, lines: [{ accountCode: '5100', debit: 500, credit: null }] }).lines !== undefined
+  && validateJournal({ ...jGood, lines: [{ accountCode: '', debit: 500, credit: null }, { accountCode: '1000', debit: null, credit: 500 }] }).line0 !== undefined
+  && validateJournal({ ...jGood, lines: [{ accountCode: '5100', debit: 500, credit: 500 }, { accountCode: '1000', debit: null, credit: 500 }] }).line0 !== undefined
+  && validateJournal({ ...jGood, lines: [{ accountCode: '5100', debit: null, credit: null }, { accountCode: '1000', debit: null, credit: 500 }] }).line0 !== undefined);
+check('journal blocks unbalanced totals',
+  validateJournal({ ...jGood, lines: [{ accountCode: '5100', debit: 500, credit: null }, { accountCode: '1000', debit: null, credit: 400 }] }).totals !== undefined);
+check('approval chain untouched', isAllowed('Approved' as never, 'Posted' as never)
+  && !isAllowed('Draft' as never, 'Posted' as never) && countsAsPosted('Posted' as never));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

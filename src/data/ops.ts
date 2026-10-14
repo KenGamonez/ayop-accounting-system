@@ -3,6 +3,7 @@
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
 import type { PurchaseOrder, TxnStatus } from './seed';
+import { BUSINESS_UNITS, COA } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
 
@@ -125,4 +126,90 @@ export function nextTxnId(existing: string[]): string {
     if (m) max = Math.max(max, parseInt(m[1], 10));
   });
   return 'TXN-2026-' + String(max + 1).padStart(4, '0');
+}
+
+// ---------- disbursement entry + date-range search ----------
+
+export interface DisbursementInput {
+  date: string;
+  businessUnit: string;
+  particulars: string;
+  supplier: string;
+  accountCode: string;
+  amount: number | null;
+}
+
+/** Plain-language validation for the staff disbursement form. */
+export function validateDisbursement(d: DisbursementInput): string[] {
+  const errs: string[] = [];
+  if (!d.date) errs.push('Date is required — pick the payment date.');
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date) || isNaN(new Date(d.date + 'T00:00:00').getTime()))
+    errs.push('Date must be a real calendar date (YYYY-MM-DD).');
+  if (!d.particulars.trim()) errs.push('Particulars are required — say in plain words what the payment was for.');
+  if (!d.supplier.trim()) errs.push('Supplier is required — who was paid?');
+  if (!BUSINESS_UNITS.includes(d.businessUnit as never))
+    errs.push('Business Unit must be one of the nine Ayop units.');
+  if (!COA.some(c => c.code === d.accountCode))
+    errs.push('Account must be chosen from the Chart of Accounts.');
+  if (d.amount === null || !isFinite(d.amount)) errs.push('Amount must be a number.');
+  else if (d.amount <= 0) errs.push('Amount must be greater than zero.');
+  return errs;
+}
+
+/** Inclusive date-range match; empty bounds mean open-ended. */
+export function inDateRange(date: string, from: string, to: string): boolean {
+  return (!from || date >= from) && (!to || date <= to);
+}
+
+export function dateRangeError(from: string, to: string): string | null {
+  if (from && to && from > to) return 'Start Date is later than End Date — swap them or clear the filter.';
+  return null;
+}
+
+// ---------- guided journal entry ----------
+
+export interface JournalLineInput {
+  accountCode: string;
+  debit: number | null;
+  credit: number | null;
+}
+
+export interface JournalInput {
+  date: string;
+  particulars: string;
+  businessUnit: string;
+  lines: JournalLineInput[];
+}
+
+export function journalTotals(lines: JournalLineInput[]): { debit: number; credit: number; diff: number; balanced: boolean } {
+  const num = (v: number | null) => (v !== null && isFinite(v) && v > 0 ? v : 0);
+  const debit = lines.reduce((s, l) => s + num(l.debit), 0);
+  const credit = lines.reduce((s, l) => s + num(l.credit), 0);
+  const diff = debit - credit;
+  return { debit, credit, diff, balanced: debit > 0 && Math.abs(diff) < 0.005 };
+}
+
+/** Field-level errors keyed for inline display; empty object = submittable. */
+export function validateJournal(j: JournalInput): Record<string, string> {
+  const e: Record<string, string> = {};
+  if (!j.date) e.date = 'Entry date is required.';
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(j.date) || isNaN(new Date(j.date + 'T00:00:00').getTime()))
+    e.date = 'Entry date must be a real calendar date.';
+  if (!j.particulars.trim()) e.particulars = 'Tell us in plain words what this entry records and why.';
+  if (!BUSINESS_UNITS.includes(j.businessUnit as never)) e.businessUnit = 'Pick one of the nine Ayop business units.';
+  const usable = j.lines.filter(l => l.accountCode || (l.debit ?? 0) > 0 || (l.credit ?? 0) > 0);
+  if (usable.length < 2) e.lines = 'Add at least two lines — one debit and one credit.';
+  j.lines.forEach((l, i) => {
+    const tag = `line${i}`;
+    if (!l.accountCode) { if ((l.debit ?? 0) > 0 || (l.credit ?? 0) > 0) e[tag] = `Line ${i + 1}: choose an account from the chart.`; return; }
+    if (!COA.some(c => c.code === l.accountCode)) { e[tag] = `Line ${i + 1}: unknown account code.`; return; }
+    const d = l.debit ?? 0, c = l.credit ?? 0;
+    if ((d < 0 || c < 0) || !isFinite(d) || !isFinite(c)) e[tag] = `Line ${i + 1}: amounts cannot be negative.`;
+    else if (d > 0 && c > 0) e[tag] = `Line ${i + 1}: put the amount in Debit or Credit, not both.`;
+    else if (d === 0 && c === 0) e[tag] = `Line ${i + 1}: enter an amount in Debit or Credit.`;
+  });
+  const t = journalTotals(j.lines);
+  if (!e.lines && t.debit === 0) e.totals = 'Enter at least one debit amount.';
+  else if (!e.lines && !t.balanced) e.totals = `Debits and credits must match — difference is ${Math.abs(t.diff).toLocaleString('en-PH')}. Adjust the lines above.`;
+  return e;
 }
