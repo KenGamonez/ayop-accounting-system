@@ -726,5 +726,18 @@ check('import idempotency keys are deterministic per file/type/row',
   && importIdemKey('PO List.xlsx', 'transactions', 3) !== importIdemKey('PO List.xlsx', 'purchase_orders', 3)
   && /^[a-z0-9-]+$/.test(importIdemKey('My File (final) v2.XLSX', 'inventory', 0)));
 
+// ---- slice 3 hardening: immutability guards, posting disabled ----
+const mig7 = readFileSync('supabase/migrations/20261014000007_immutability_guards.sql', 'utf8');
+const mig7code = mig7.split('\n').filter(l => !l.trimStart().startsWith('--')).join('\n');
+check('guard migration locks transitions, deletes, and journal posting',
+  mig7.includes('create trigger txn_immutable')
+  && mig7.includes('create trigger journal_locked')
+  && mig7.includes('create trigger journal_lines_locked')
+  && mig7.includes('LOCKED: only Draft transactions may be deleted')
+  && mig7.includes('LOCKED: only Draft journal entries may be deleted')
+  && mig7.includes('NO_POSTING_PATH')
+  && mig7.includes('LOCKED: journal lines are immutable')
+  && !/set status = 'Posted'|post_journal|Approve Income/i.test(mig7code));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

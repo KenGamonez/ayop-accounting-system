@@ -201,3 +201,6 @@ Migration 20261014000005 applied and verified (6 ops tables, receipt/move ledger
 ## 15. Slice 5 implementation record (2026-10-14)
 
 Migration 20261014000006 applied and verified (upsert_supplier, authenticated-only EXECUTE, anon denied, no direct-write policies). Live import routing with deterministic idempotency keys; OB blocked live. Provisioning (0/7) and Gate-1 still block e2e + posting. Next: Slice 3 per PROJECT_STATE.md.
+## 16. Slice 3 hardening record — posting still disabled (2026-10-14)
+
+Migration 20261014000007 applied and proven live (illegal transitions, non-draft deletes, and journal status changes all rejected; legal paths pass; zero residue). Future posting migration must consciously relax the journal-status freeze. Next: Slice 3 per PROJECT_STATE.md.
