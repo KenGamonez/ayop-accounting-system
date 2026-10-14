@@ -189,3 +189,6 @@ Project yop-accounting-system (	gokmcupkxvgsniljqpf, ap-southeast-1) created; s
 ## 11. Slice 2 implementation record (2026-10-14)
 
 Migration 20261014000002 applied and catalog-verified (transactions + transition matrix + audit + create/transition/reverse RPCs, scoped RLS, authenticated-only EXECUTE; 0 live rows). Frontend live adapter, live login, and async store delegation implemented with demo behavior byte-identical by default. Provisioning (0/7 linked) still blocks e2e verification and any live activation. Next: Slice 3 per PROJECT_STATE.md.
+## 12. Slice 3 preparation record — stopped at decision boundary (2026-10-14)
+
+Migration 20261014000003 applied and remotely verified (journal_entries + journal_lines, single-side-per-line CHECKs, deferrable balance trigger proven firing with 0 rows persisted, scoped SELECT-only RLS, submit_journal_draft RPC, authenticated-only EXECUTE). NO posting path, NO debit/credit mapping, NO Approve Income treatment, NO opening balances: Gate-1 decisions and 0/7 staff linkage both still open. Posting work resumes only after explicit approvals + provisioning.

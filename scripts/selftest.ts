@@ -595,5 +595,24 @@ check('rpc errors surface plain language',
 check('membership resolves to staff shape without name matching',
   (() => { const s = membershipToStaff({ id: 'jeann', name: 'Jeann', role: 'Warehouse', unit: 'Central Warehouse' }); return s.id === 'jeann' && s.initials === 'J'; })());
 
+// ---- slice 3 prep: balanced-journal store, no posting path ----
+const mig3 = readFileSync('supabase/migrations/20261014000003_journal_store.sql', 'utf8');
+check('journal migration defines entries+lines, balance trigger, RLS, draft RPC (no posting)',
+  mig3.includes('create table if not exists public.journal_entries')
+  && mig3.includes('create table if not exists public.journal_lines')
+  && mig3.includes('enforce_journal_balance')
+  && mig3.includes('constraint trigger journal_balance_check')
+  && mig3.includes('check (debit = 0 or credit = 0)')
+  && mig3.includes('journal_read_scoped') && mig3.includes('journal_lines_read_scoped')
+  && mig3.includes('create or replace function public.submit_journal_draft')
+  && !/create policy[^;]*for (insert|update|delete)/i.test(mig3)
+  && !/post_journal|approve-and-post|set status = 'Posted'|set status='Posted'/i.test(mig3)
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig3.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, '')));
+check('draft RPC validates structure before the trigger (friendly errors, idempotent)',
+  mig3.includes('TOO_FEW_LINES') && mig3.includes('BOTH_SIDES') && mig3.includes('ZERO_LINE')
+  && mig3.includes('UNBALANCED') && mig3.includes('BAD_ACCOUNT')
+  && mig3.includes('on conflict (created_by, idempotency_key) do nothing')
+  && mig3.includes("'Draft', v_actor, nullif(p_idem, '')"));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
