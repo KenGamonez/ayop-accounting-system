@@ -30,6 +30,7 @@ export default function Transactions() {
   return (
     <>
       <PageHead title="Transaction" sub="Transaction Entry — first step of the staff workflow. Uses Item (not Description) and Supplier (not Counterpart). New entries go to Accountant Review; they are not posted." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
+      <div className="next-action no-print"><span><strong>Next action:</strong> {show ? 'fill in Item, Supplier, and Amount, then submit for Accountant Review.' : 'open the entry form, or resubmit a rejected row below.'}</span>{!show && <button className="btn small blue" onClick={() => setShow(true)}>Start an entry</button>}</div>
       {show && (
         <div className="card">
           <h3>New transaction entry</h3>

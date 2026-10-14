@@ -17,6 +17,9 @@ export default function Purchasing() {
   return (
     <>
       <PageHead title="Purchasing (P.O.)" sub="Staff workflow: supplier → purchase order → delivery date → receiving → inventory. Synthetic demo." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close' : '+ New P.O.'}</button>} />
+      {pos.filter(p => !p.received && p.status !== 'Cancelled').length > 0 && !show && (
+        <div className="next-action"><span><strong>Next action:</strong> {pos.filter(p => !p.received && p.status !== 'Cancelled').length} open P.O.{pos.filter(p => !p.received && p.status !== 'Cancelled').length === 1 ? '' : 's'} awaiting delivery — confirm receipt below to update inventory.</span></div>
+      )}
       {show && (
         <div className="card"><h3>New purchase order</h3>
           <div className="form-grid">

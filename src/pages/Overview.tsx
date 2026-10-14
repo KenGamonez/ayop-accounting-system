@@ -5,7 +5,7 @@ import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
 export default function Overview() {
-  const { txns, inventory, pos, audit } = useStore();
+  const { txns, inventory, pos, audit, user } = useStore();
   const [unit, setUnit] = useState('All units');
 
   const posted = useMemo(() => txns.filter(t => t.status === 'Posted' && (unit === 'All units' || t.businessUnit === unit)), [txns, unit]);
@@ -13,6 +13,9 @@ export default function Overview() {
   const revenue = posted.filter(t => t.classification === 'Revenue').reduce((s, t) => s + t.amount, 0);
   const expense = posted.filter(t => t.classification === 'Expense').reduce((s, t) => s + t.amount, 0);
   const low = inventory.filter(i => i.quantity <= i.reorderLevel);
+  const role = user?.role ?? '';
+  const isWarehouse = ['Warehouse', 'Diagnostics Cashier', 'Pharmacy'].includes(role);
+  const isAccounting = ['Accounting', 'CEO', 'HR', 'IT'].includes(role);
 
   return (
     <>
@@ -29,6 +32,31 @@ export default function Overview() {
         <div className="kpi"><div className="lbl">Low-stock items</div><div className="val">{low.length}</div><div className="sub"><Link to="/admin/inventory">Review inventory →</Link></div></div>
       </div>
       <div className="grid g2" style={{ marginTop: 14 }}>
+        <div className="card">
+          <h3>{isWarehouse ? 'Warehouse — daily tasks' : isAccounting ? 'Accounting — daily tasks' : 'Quick tasks'}</h3>
+          <p className="small muted">
+            {isWarehouse
+              ? 'Enter stock movements, check levels, and receive deliveries. Signed in as ' + (user?.name ?? 'demo') + ' (preview only — no enforced permissions).'
+              : isAccounting
+              ? 'Review entries, clear approvals, and print statements. Signed in as ' + (user?.name ?? 'demo') + ' (preview only — no enforced permissions).'
+              : 'Shortcuts for your workspace. Role previews never enforce access — this is a frontend demo.'}
+          </p>
+          <div className="btn-row">
+            {(isWarehouse ? [
+              { to: '/admin/transaction', l: '+ New transaction entry' },
+              { to: '/admin/inventory', l: 'Check inventory' },
+              { to: '/admin/purchasing', l: 'Receive P.O. deliveries' },
+            ] : isAccounting ? [
+              { to: '/admin/transaction', l: '+ New transaction entry' },
+              { to: '/admin/approval', l: 'Review approvals' },
+              { to: '/admin/reports', l: 'Print reports' },
+            ] : [
+              { to: '/admin/transaction', l: 'New transaction' },
+              { to: '/admin/approval', l: 'Approvals' },
+              { to: '/admin/inventory', l: 'Inventory' },
+            ]).map(a => <Link key={a.to + a.l} className="btn small ghost" to={a.to}>{a.l}</Link>)}
+          </div>
+        </div>
         <div className="card">
           <h3>Latest transactions</h3>
           <div className="tbl-wrap"><table className="tbl">

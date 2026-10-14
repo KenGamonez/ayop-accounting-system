@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, INVENTORY_TYPES, ITEM_CATEGORIES, peso } from '../data/seed';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
@@ -18,6 +19,7 @@ export default function Inventory() {
   return (
     <>
       <PageHead title="Inventory" sub="Staff fields: Business Unit · Type · Item · Quantity · Amount · Supplier. Types: Laboratory, Pharmacy, Dialysis, Admin. Synthetic demo." />
+      {low.length > 0 && <div className="next-action"><span><strong>Next action:</strong> {low.length} item{low.length === 1 ? ' is' : 's are'} at or below reorder — raise a purchase order.</span><Link className="btn small blue" to="/admin/purchasing">Go to Purchasing</Link></div>}
       <div className="grid g4">
         <div className="kpi"><div className="lbl">SKUs shown</div><div className="val">{rows.length}</div></div>
         <div className="kpi"><div className="lbl">Stock value (demo)</div><div className="val">{peso(totalVal)}</div></div>
