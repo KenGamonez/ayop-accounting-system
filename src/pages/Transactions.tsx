@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, CLASSIFICATIONS, COA, ITEM_CATEGORIES, TRANSACTION_KINDS } from '../data/seed';
 import { canResubmit } from '../data/ops';
+import { roleKindFor } from '../data/access';
 import { toCSV, fileName } from '../data/io';
 import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
@@ -45,7 +46,9 @@ export default function Transactions() {
             <label className="f">Date<input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></label>
             <label className="f">Business Unit<select value={form.businessUnit} onChange={e => setForm({ ...form, businessUnit: e.target.value })}>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select></label>
             <label className="f">Classification<select value={form.classification} onChange={e => setForm({ ...form, classification: e.target.value })}>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select></label>
-            <label className="f">Transaction kind<select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>{TRANSACTION_KINDS.map(k => <option key={k}>{k}</option>)}</select></label>
+            {roleKindFor(user?.role ?? '') !== 'warehouse' && (
+              <label className="f">Transaction kind<select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>{TRANSACTION_KINDS.map(k => <option key={k}>{k}</option>)}</select></label>
+            )}
             <label className="f">Item (not Description)<input value={form.item} onChange={e => setForm({ ...form, item: e.target.value })} placeholder="e.g. CBC reagent kit, 10 boxes" /></label>
             <label className="f">Item category<select value={form.category} onChange={e => setForm({ ...form, category: e.target.value })}>{ITEM_CATEGORIES.map(c => <option key={c}>{c}</option>)}</select></label>
             <label className="f">Supplier (not Counterpart)<input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} placeholder="e.g. MedSupply Trading" /></label>

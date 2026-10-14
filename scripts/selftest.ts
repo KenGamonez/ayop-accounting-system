@@ -9,7 +9,7 @@ import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, condit
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
-import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS } from '../src/data/access.ts';
+import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
 import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
@@ -420,8 +420,11 @@ const wLabels = wNav.map(n => n.label);
 check('warehouse nav holds only dashboard + four areas + settings',
   wLabels.join('|') === 'Overview|Transaction|Approval|Inventory|Purchasing (P.O.)|Settings', wLabels);
 const wTxnSubs = (wNav.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.label);
-check('warehouse transaction menu has no cash types or accounting links',
-  wTxnSubs.join('|') === 'New Entry / All Transactions|Type & Classification|Disbursement|Journal', wTxnSubs);
+check('warehouse transaction menu holds New Entry only',
+  wTxnSubs.join('|') === 'New Entry / All Transactions'
+  && WAREHOUSE_TX_SUBS.join() === '/admin/transaction', wTxnSubs);
+check('warehouse New Entry hides kind field (default Disbursement kept for submit)',
+  roleKindFor('Warehouse') === 'warehouse' && roleKindFor('Accounting') === 'full' && roleKindFor('CEO') === 'full');
 check('no accountant-only destination leaks into warehouse nav',
   !wNav.some(n => ACCOUNTING_ONLY_LABELS.includes(n.label)
     || (n.subs ?? []).some(s => ACCOUNTING_ONLY_LABELS.includes(s.label))));
