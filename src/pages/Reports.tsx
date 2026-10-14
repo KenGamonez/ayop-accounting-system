@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso } from '../data/seed';
-import { conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
+import { accountLabel, conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Money, Pill } from '../components/ui';
 
@@ -119,11 +119,11 @@ export function IncomeExpense() {
         {empty ? <EmptyState what="no posted revenue or expenses in this period" /> : <>
           <h3>Revenue — {peso(inc.totalRevenue)}</h3>
           <div className="tbl-wrap"><table className="tbl"><thead><tr>{INCOME_REVENUE_COLUMNS.map((c, i) => <th key={c} style={i === 5 ? { textAlign: 'right' } : undefined}>{c}</th>)}</tr></thead>
-            <tbody>{inc.revenueLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{t.accountCode}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
+            <tbody>{inc.revenueLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{accountLabel(t.accountCode, t.accountName)}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
               <tr className="total-row"><td colSpan={5}><strong>Total revenue</strong></td><td className="num"><strong><Money n={inc.totalRevenue} /></strong></td></tr></tbody></table></div>
           <h3 style={{ marginTop: 14 }}>Expenses — {peso(inc.totalExpense)}</h3>
           <div className="tbl-wrap"><table className="tbl"><thead><tr>{INCOME_EXPENSE_COLUMNS.map((c, i) => <th key={c} style={i === 5 ? { textAlign: 'right' } : undefined}>{c}</th>)}</tr></thead>
-            <tbody>{inc.expenseLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{t.accountCode}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.supplier}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
+            <tbody>{inc.expenseLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{accountLabel(t.accountCode, t.accountName)}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.supplier}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
               <tr className="total-row"><td colSpan={5}><strong>Total expenses</strong></td><td className="num"><strong><Money n={inc.totalExpense} /></strong></td></tr></tbody></table></div>
           <h3 style={{ marginTop: 12 }}>Net {inc.net >= 0 ? 'income' : 'loss'} (demo): {peso(inc.net)}</h3>
         </>}

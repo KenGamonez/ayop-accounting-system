@@ -131,6 +131,18 @@ export function getAccount(code: string): AccountRecord | null {
   return found ? { code: found.code, name: found.name, type: found.type } : null;
 }
 
+/**
+ * Display label for ITEM CODE cells: `CODE — COA description`, resolved from
+ * the Chart of Accounts. Falls back to the row's own stored account name
+ * (actual project data), or the bare code if neither exists — never invented.
+ */
+export function accountLabel(code: string, fallbackName?: string): string {
+  const found = getAccount(code);
+  if (found) return `${found.code} — ${found.name}`;
+  const fallback = (fallbackName ?? '').trim();
+  return fallback ? `${code} — ${fallback}` : code;
+}
+
 export function accountOptions(): AccountRecord[] {
   return COA.map(c => ({ code: c.code, name: c.name, type: c.type }));
 }

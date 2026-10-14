@@ -7,7 +7,7 @@ dateRangeError, journalTotals, validateJournal } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA } from '../src/data/seed.ts';
-import { accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
+import { accountLabel, accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
 import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
@@ -367,6 +367,13 @@ check('GL opens alone; other tabs keep full row',
 const acctLabels = (NAV.find(n => n.label === 'Accounting')?.subs ?? []).map(s => s.label);
 check('sidebar has exactly the six approved destinations',
   acctLabels.join('|') === 'Trial Balance|Income & Expense|Financial Condition|All Reports (Printable)|Month-End Close|General Ledger', acctLabels);
+check('ITEM CODE label resolves code + COA description from project data',
+  accountLabel('4100') === '4100 — Pharmacy Sales'
+  && accountLabel('4000') === '4000 — Service Revenue — Diagnostics'
+  && accountLabel(' 5000 ') === '5000 — Medical Supplies Expense'
+  && seedInc.revenueLines.every(t => accountLabel(t.accountCode, t.accountName).startsWith(t.accountCode + ' — '))
+  && accountLabel('9999', 'Legacy Account') === '9999 — Legacy Account'
+  && accountLabel('9999') === '9999');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
