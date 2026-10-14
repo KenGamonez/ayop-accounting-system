@@ -2,7 +2,7 @@
 // receipt math, status derivation, and inventory-type defaults. Covered by
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
-import type { PurchaseOrder } from './seed';
+import type { PurchaseOrder, TxnStatus } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
 
@@ -79,4 +79,50 @@ export function defaultInventoryTypeFor(unit: string): string {
   if (unit === 'Diagnostic Center' || unit === 'Animal Bite Center' || unit === 'PhilHealth Yakap/Konsulta') return 'Laboratory';
   if (unit === 'Dialysis Center') return 'Dialysis';
   return 'Admin';
+}
+
+// ---------- approval & ledger-integrity rules (single source of truth) ----------
+
+/** Only this status contributes to posted-ledger views and financial summaries. */
+export function countsAsPosted(status: TxnStatus): boolean {
+  return status === 'Posted';
+}
+
+/** Legal frontend workflow transitions. Anything else is rejected by the store. */
+export const ALLOWED_TRANSITIONS: Record<TxnStatus, TxnStatus[]> = {
+  'Draft': ['For Accountant Review'],
+  'For Accountant Review': ['Accountant Reviewed', 'Rejected'],
+  'Accountant Reviewed': ['For Owner Approval', 'Rejected'],
+  'For Owner Approval': ['Approved', 'Rejected'],
+  'Approved': ['Posted', 'Rejected'],
+  'Posted': ['Reversed'],
+  'Rejected': ['For Accountant Review', 'Draft'],
+  'Reversed': [],
+};
+
+export function isAllowed(from: TxnStatus, to: TxnStatus): boolean {
+  return (ALLOWED_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/** Who must act next on a queued transaction (display helper — not enforcement). */
+export function nextRoleFor(status: TxnStatus): string {
+  switch (status) {
+    case 'For Accountant Review': return 'Accounting — Daniflor Calago';
+    case 'Accountant Reviewed': return 'Accounting — forward to owner';
+    case 'For Owner Approval': return 'Owner/Management — Joy Ayop';
+    case 'Approved': return 'Posting to General Ledger';
+    case 'Draft': return 'Originator — submit for review';
+    case 'Rejected': return 'Originator — correct and resubmit';
+    default: return '—';
+  }
+}
+
+/** Collision-free demo id: max numeric TXN-2026-NNNN suffix + 1. */
+export function nextTxnId(existing: string[]): string {
+  let max = 40;
+  existing.forEach(id => {
+    const m = /^TXN-2026-(\d+)$/.exec(id ?? '');
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  });
+  return 'TXN-2026-' + String(max + 1).padStart(4, '0');
 }

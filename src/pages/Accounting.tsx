@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { COA } from '../data/seed';
+import { Link, useSearchParams } from 'react-router-dom';
+import { COA, Txn } from '../data/seed';
+import { countsAsPosted } from '../data/ops';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -28,7 +29,7 @@ export default function Accounting() {
 
   const pick = (t: Tab) => { setTab(t); setParams({ tab: t }, { replace: true }); };
 
-  const posted = useMemo(() => txns.filter(t => t.status === 'Posted'), [txns]);
+  const posted = useMemo(() => txns.filter(t => countsAsPosted(t.status)), [txns]);
   const gl = useMemo(() => posted.map(t => ({
     date: t.date, ref: t.id, particulars: `${t.item} — ${t.businessUnit}`,
     debit: t.classification === 'Expense' || t.classification === 'Asset' ? t.amount : 0,
@@ -55,26 +56,41 @@ export default function Accounting() {
       )}
       {tab === 'gl' && (
         <div className="card"><h3>General Ledger — posted entries ({gl.length})</h3>
+          {gl.length === 0
+            ? <div className="notice">No posted entries yet. Pending, draft, and rejected items are excluded by design — approve and post them from the <Link to="/admin/approval">Approval queue</Link>.</div>
+            : <>
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Ref</th><th>Particulars / Account</th><th style={{ textAlign: 'right' }}>Debit</th><th style={{ textAlign: 'right' }}>Credit</th></tr></thead>
             <tbody>{gl.map((g, i) => <tr key={i}><td>{g.date}</td><td>{g.ref}</td><td>{g.particulars}<div className="small muted">{g.account}</div></td><td className="num">{g.debit ? <Money n={g.debit} /> : '—'}</td><td className="num">{g.credit ? <Money n={g.credit} /> : '—'}</td></tr>)}</tbody></table></div>
-          <p className="small muted">Journal drafts ({journal.filter(j => j.status === 'Draft').length}) are not included until posted from the Journal screen.</p>
+          <p className="small muted">Journal drafts ({journal.filter(j => j.status === 'Draft').length}) are not included until reviewed, approved, and posted from the Journal screen.</p>
+          </>}
         </div>
       )}
-      {tab === 'ap' && (
-        <div className="card"><h3>Accounts Payable — supplier billings</h3>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Ref</th><th>Supplier</th><th>Unit</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
-            <tbody>{ap.length ? ap.map(t => <tr key={t.id}><td>{t.id}</td><td>{t.supplier}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.amount} /></td></tr>) : <tr><td colSpan={5} className="muted">No payables in demo set.</td></tr>}</tbody></table></div>
-        </div>
-      )}
-      {tab === 'ar' && (
-        <div className="card"><h3>Accounts Receivable — amounts due (demo)</h3>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Ref</th><th>Supplier / Client</th><th>Unit</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
-            <tbody>{ar.length ? ar.map(t => <tr key={t.id}><td>{t.id}</td><td>{t.supplier}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.amount} /></td></tr>) : <tr><td colSpan={5} className="muted">No receivables in demo set — collection entries would appear here.</td></tr>}</tbody></table></div>
-        </div>
-      )}
+      {tab === 'ap' && <PayableTable title="Accounts Payable — supplier billings" empty="No payables in demo set. P.O. receipts queue payables here for review." rows={ap} />}
+      {tab === 'ar' && <PayableTable title="Accounts Receivable — amounts due (demo)" empty="No receivables in demo set — collection entries would appear here." rows={ar} client />}
       {tab === 'bank' && <BankRec />}
       {tab === 'audit' && <AuditTable />}
     </>
+  );
+}
+
+function PayableTable({ title, empty, rows, client }: { title: string; empty: string; rows: Txn[]; client?: boolean }) {
+  const awaiting = rows.filter(t => !countsAsPosted(t.status));
+  const settled = rows.filter(t => countsAsPosted(t.status));
+  const group = (label: string, list: Txn[]) => (
+    <>
+      <h3 style={{ margin: '12px 0 6px', fontSize: 13 }}>{label} ({list.length})</h3>
+      <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Ref</th><th>{client ? 'Supplier / Client' : 'Supplier'}</th><th>Unit</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
+        <tbody>{list.length ? list.map(t => <tr key={t.id}><td>{t.id}</td><td>{t.supplier}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.amount} /></td></tr>) : <tr><td colSpan={5} className="muted">None.</td></tr>}</tbody></table></div>
+    </>
+  );
+  return (
+    <div className="card"><h3>{title}</h3>
+      {rows.length === 0
+        ? <p className="small muted">{empty}</p>
+        : <><p className="small muted">Only Posted rows feed the ledger — items below awaiting review are obligations to track, not posted results.</p>
+          {group('Awaiting review / approval', awaiting)}
+          {group('Posted', settled)}</>}
+    </div>
   );
 }
 

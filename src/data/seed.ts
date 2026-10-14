@@ -104,6 +104,7 @@ export interface JournalEntry {
   amount: number;
   status: 'Draft' | 'Posted';
   sourceTxn: string;
+  queuedTxn?: string;
 }
 
 export interface AuditEvent {

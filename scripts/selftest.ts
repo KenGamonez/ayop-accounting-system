@@ -1,7 +1,7 @@
 // Frontend self-test for import/export logic. Run: node scripts/selftest.ts
 import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
-import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining } from '../src/data/ops.ts';
+import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed, nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS } from '../src/data/ops.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
 let pass = 0, fail = 0;
@@ -96,6 +96,36 @@ check('inventory type defaults', defaultInventoryTypeFor('Pharmacy') === 'Pharma
   && defaultInventoryTypeFor('Diagnostic Center') === 'Laboratory'
   && defaultInventoryTypeFor('Dialysis Center') === 'Dialysis'
   && defaultInventoryTypeFor('Central Warehouse') === 'Admin');
+
+// ---- approval transitions & ledger inclusion ----
+const chain: [string, string][] = [
+  ['Draft', 'For Accountant Review'],
+  ['For Accountant Review', 'Accountant Reviewed'],
+  ['Accountant Reviewed', 'For Owner Approval'],
+  ['For Owner Approval', 'Approved'],
+  ['Approved', 'Posted'],
+  ['Posted', 'Reversed'],
+];
+check('happy-path chain allowed', chain.every(([a, b]) => isAllowed(a as never, b as never)), chain);
+check('posting skips approval blocked', !isAllowed('Draft' as never, 'Posted' as never)
+  && !isAllowed('For Accountant Review' as never, 'Posted' as never)
+  && !isAllowed('Approved' as never, 'Accountant Reviewed' as never));
+check('rejection + resubmission allowed', isAllowed('For Accountant Review' as never, 'Rejected' as never)
+  && isAllowed('Rejected' as never, 'For Accountant Review' as never)
+  && isAllowed('Rejected' as never, 'Draft' as never));
+check('posted locked except reversal', !isAllowed('Posted' as never, 'Draft' as never)
+  && !isAllowed('Posted' as never, 'Approved' as never)
+  && isAllowed('Posted' as never, 'Reversed' as never)
+  && !isAllowed('Reversed' as never, 'Posted' as never));
+check('only Posted counts for ledger', countsAsPosted('Posted' as never)
+  && !['Draft', 'For Accountant Review', 'Accountant Reviewed', 'For Owner Approval', 'Approved', 'Rejected', 'Reversed'].some(s => countsAsPosted(s as never)));
+check('every status has a defined rule', (Object.keys(ALLOWED_TRANSITIONS).length === 8));
+check('next role named per queue step', nextRoleFor('For Accountant Review' as never).includes('Daniflor')
+  && nextRoleFor('For Owner Approval' as never).includes('Joy')
+  && nextRoleFor('Posted' as never) === '—');
+check('txn ids collision-free', nextTxnId(['TXN-2026-0041', 'TXN-2026-0050']) === 'TXN-2026-0051'
+  && nextTxnId([]) === 'TXN-2026-0041'
+  && nextTxnId(['TXN-2026-0099', 'TXN-2026-0100']) === 'TXN-2026-0101');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

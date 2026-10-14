@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { AuditEvent, InventoryItem, JournalEntry, PurchaseOrder, Staff, STAFF, Txn, seedAudit, seedInventory, seedJournal, seedPOs, seedTransactions } from '../data/seed';
-import { applyReceipt, defaultInventoryTypeFor } from '../data/ops';
+import { AuditEvent, COA, InventoryItem, JournalEntry, PurchaseOrder, Staff, STAFF, Txn, TxnStatus, seedAudit, seedInventory, seedJournal, seedPOs, seedTransactions } from '../data/seed';
+import { applyReceipt, defaultInventoryTypeFor, isAllowed, nextTxnId } from '../data/ops';
 
 // Older demo state saved P.O. lines without receivedQty — backfill so the
 // receipt workflow degrades gracefully instead of crashing or double-counting.
@@ -17,8 +17,8 @@ interface Store {
   logout: () => void;
   txns: Txn[];
   addTxn: (t: Omit<Txn, 'id' | 'status'>) => Txn;
-  transition: (id: string, to: Txn['status'], note?: string) => void;
-  reverseTxn: (id: string) => void;
+  transition: (id: string, to: TxnStatus, note?: string) => { ok: boolean; message: string };
+  reverseTxn: (id: string) => { ok: boolean; message: string };
   inventory: InventoryItem[];
   adjustInventory: (id: string, delta: number, reason?: string) => void;
   setInventoryQty: (id: string, qty: number, reason?: string) => void;
@@ -30,7 +30,7 @@ interface Store {
   cancelPO: (id: string) => void;
   receivePOLine: (id: string, lineIdx: number, qty: number) => { ok: boolean; message: string };
   journal: JournalEntry[];
-  postJournal: (id: string) => void;
+  queueJournal: (id: string) => { ok: boolean; message: string };
   addJournal: (j: Omit<JournalEntry, 'id'>) => void;
   audit: AuditEvent[];
   log: (action: string, ref: string, detail: string) => void;
@@ -82,20 +82,19 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     logout: () => setUserId(null),
     txns,
     addTxn: (t) => {
-      const n = txns.length + 41;
-      const txn: Txn = { ...t, id: 'TXN-2026-' + String(n).padStart(4, '0'), status: 'For Accountant Review' };
+      const txn: Txn = { ...t, id: nextTxnId(txns.map(x => x.id)), status: 'For Accountant Review' };
       setTxns(x => [txn, ...x]);
       const actor = STAFF.find(s => s.name === t.enteredBy)?.name ?? t.enteredBy;
       setAudit(a => [{ id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'Created transaction', ref: txn.id, detail: t.item }, ...a]);
       return txn;
     },
     transition: (id, to, note) => {
-      setTxns(x => x.map(t => {
-        if (t.id !== id) return t;
-        // Posted entries are protected: only reversal path changes them
-        if (t.status === 'Posted' && to !== 'Reversed') return t;
-        return { ...t, status: to, remarks: note ?? t.remarks };
-      }));
+      const cur = txns.find(t => t.id === id);
+      if (!cur) return { ok: false, message: `Transaction ${id} not found — no change made.` };
+      if (cur.status === to) return { ok: false, message: `${id} is already ${to} — repeated action ignored.` };
+      if (!isAllowed(cur.status, to))
+        return { ok: false, message: `Cannot move ${id} from ${cur.status} to ${to}. Follow the Entry → Review → Approval → Posting order.` };
+      setTxns(x => x.map(t => (t.id === id ? { ...t, status: to, remarks: note ?? t.remarks } : t)));
       const labels: Record<string, string> = {
         'For Accountant Review': 'Submitted for accountant review',
         'Accountant Reviewed': 'Accountant reviewed',
@@ -106,10 +105,27 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         'Draft': 'Returned to draft',
       };
       log(labels[to] ?? to, id, note ?? '');
+      return { ok: true, message: `${id}: ${labels[to] ?? to}.` };
     },
     reverseTxn: (id) => {
-      setTxns(x => x.map(t => (t.id === id ? { ...t, status: 'Reversed' as const } : t)));
-      log('Reversal entry recorded', id, 'Correcting reversal created; original preserved for audit.');
+      const cur = txns.find(t => t.id === id);
+      if (!cur) return { ok: false, message: `Transaction ${id} not found — no change made.` };
+      if (cur.status !== 'Posted') return { ok: false, message: `Only Posted entries can be reversed (${id} is ${cur.status}).` };
+      // The original is locked as Reversed; the offsetting correction is a
+      // real queued entry so it passes through review like everything else.
+      const rev: Txn = {
+        ...cur,
+        id: nextTxnId(txns.map(x => x.id)),
+        item: `REVERSAL of ${id} — ${cur.item}`,
+        status: 'For Accountant Review',
+        remarks: `Correcting reversal of posted entry ${id}. Original preserved; this reversal needs review before posting.`,
+      };
+      setTxns(x => [rev, ...x.map(t => (t.id === id ? { ...t, status: 'Reversed' as const } : t))]);
+      const actor = user?.name ?? 'Demo user';
+      setAudit(a => [
+        { id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'Reversal recorded', ref: id, detail: `Original locked as Reversed; offsetting entry ${rev.id} queued for review` },
+      ...a].slice(0, 200));
+      return { ok: true, message: `${id} locked as Reversed. Offsetting entry ${rev.id} queued for accountant review.` };
     },
     inventory,
     adjustInventory: (id, delta, reason) => {
@@ -181,9 +197,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         };
         setInventory(x => [rec, ...x]);
       }
-      const n = txns.length + 41;
       const txn: Txn = {
-        id: 'TXN-2026-' + String(n).padStart(4, '0'),
+        id: nextTxnId(txns.map(x => x.id)),
         date: today, businessUnit: po.businessUnit, classification: 'Liability',
         kind: 'Journal', item: `Supplier billing — ${po.poNo} (${line.item} × ${res.receivedQty})`,
         category: 'Medical Supplies', supplier: po.supplier,
@@ -203,9 +218,28 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       };
     },
     journal,
-    postJournal: (id) => {
-      setJournal(x => x.map(j => (j.id === id ? { ...j, status: 'Posted' as const } : j)));
-      log('Journal posted', id, 'Entry posted to General Ledger (demo).');
+    queueJournal: (id) => {
+      const j = journal.find(x => x.id === id);
+      if (!j) return { ok: false, message: 'Journal entry not found — no change made.' };
+      if (j.status !== 'Draft') return { ok: false, message: `${j.ref} is already ${j.status} — repeated action ignored.` };
+      if (j.queuedTxn) return { ok: false, message: `${j.ref} is already queued as ${j.queuedTxn} — duplicate queueing blocked.` };
+      // Map the debit side to a transaction classification for review.
+      const code = (j.debitAccount.split('—')[0] ?? j.debitAccount.split('-')[0] ?? '').trim();
+      const acct = COA.find(c => c.code === code);
+      const cls = (acct && ['Expense', 'Revenue', 'Asset', 'Liability'].includes(acct.type) ? acct.type : 'Asset') as Txn['classification'];
+      const txn: Txn = {
+        id: nextTxnId(txns.map(x => x.id)),
+        date: j.date, businessUnit: j.businessUnit, classification: cls, kind: 'Journal',
+        item: j.particulars, category: 'Medical Supplies', supplier: '—',
+        supplierPrice: 0, retailPrice: 0, quantity: 1, amount: j.amount,
+        accountCode: code || '5000', accountName: acct?.name ?? j.debitAccount,
+        enteredBy: user?.name ?? 'Demo user', status: 'For Accountant Review',
+        remarks: `Queued from journal draft ${j.ref} — needs accountant review, not posted`,
+      };
+      setTxns(x => [txn, ...x]);
+      setJournal(x => x.map(xj => (xj.id === id ? { ...xj, queuedTxn: txn.id } : xj)));
+      log('Journal draft queued for review', j.ref, `Queued as ${txn.id}; draft stays unposted until approved`);
+      return { ok: true, message: `${j.ref} queued as ${txn.id} for accountant review. The draft stays unposted.` };
     },
     addJournal: (j) => {
       const rec = { ...j, id: 'JE-' + Date.now() };
