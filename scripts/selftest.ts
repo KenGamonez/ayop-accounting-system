@@ -628,5 +628,18 @@ check('all seven switchable profiles exist with canonical ids',
   STAFF.map(s => s.id).join() === 'joy,eve,dani,jeann,jinky,mae,rodel'
   && STAFF.every(s => s.id && s.name && s.role && s.unit));
 
+// ---- slice 3 prep, continued: draft cancellation, still no posting ----
+const mig4 = readFileSync('supabase/migrations/20261014000004_journal_draft_cancel.sql', 'utf8');
+check('cancel migration is lifecycle-only (no mapping, no posting, audited)',
+  mig4.includes('create or replace function public.cancel_journal_draft')
+  && mig4.includes("status <> 'Draft'") && mig4.includes('NOT_DRAFT')
+  && mig4.includes("not in ('Accounting', 'CEO')") && mig4.includes('FORBIDDEN')
+  && mig4.includes("delete from public.journal_lines where entry_id = v_cur.id")
+  && mig4.includes("delete from public.journal_entries where id = v_cur.id")
+  && mig4.includes("'Journal draft cancelled'")
+  && !/post_journal|set status = 'Posted'|Approve Income|opening_balance/i.test(mig4)
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig4.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, ''))
+  && mig4.includes('grant execute on function public.cancel_journal_draft(bigint) to authenticated'));
+
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

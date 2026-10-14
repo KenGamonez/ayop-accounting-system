@@ -192,3 +192,6 @@ Migration 20261014000002 applied and catalog-verified (transactions + transition
 ## 12. Slice 3 preparation record — stopped at decision boundary (2026-10-14)
 
 Migration 20261014000003 applied and remotely verified (journal_entries + journal_lines, single-side-per-line CHECKs, deferrable balance trigger proven firing with 0 rows persisted, scoped SELECT-only RLS, submit_journal_draft RPC, authenticated-only EXECUTE). NO posting path, NO debit/credit mapping, NO Approve Income treatment, NO opening balances: Gate-1 decisions and 0/7 staff linkage both still open. Posting work resumes only after explicit approvals + provisioning.
+## 13. Slice 3 prep, continued (2026-10-14)
+
+Draft-cancellation lifecycle only (migration 20261014000004, verified: grants, anon denial, 0 rows). Posting, mapping, Approve Income, opening balances, and costing remain blocked on Gate-1 + provisioning. Next: Slice 3 posting per PROJECT_STATE.md.
