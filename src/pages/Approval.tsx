@@ -48,7 +48,7 @@ export default function Approval() {
         </label>
         {shownQueue.length === 0
           ? <div className="notice">{mineOnly ? 'You have no submissions in the queue. New entries from ' : 'Queue is clear — nothing awaiting review. New entries from '}<Link to="/admin/transaction">Transaction</Link>{mineOnly ? ' appear here under your account.' : ' appear here.'}</div>
-          : <label className="f" style={{ maxWidth: 480, marginBottom: 10 }}>Reviewer note (applies to next action; required when rejecting)<input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Receipts verified against P.O." /></label>}
+          : (privileged ? <label className="f" style={{ maxWidth: 480, marginBottom: 10 }}>Reviewer note (applies to next action; required when rejecting)<input value={note} onChange={e => setNote(e.target.value)} placeholder="e.g. Receipts verified against P.O." /></label> : null)}
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>ID / Progress</th><th>Item / Supplier</th><th style={{ textAlign: 'right' }}>Amount</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>{shownQueue.map(t => (

@@ -2,6 +2,8 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso, Txn, PurchaseOrder } from '../data/seed';
 import { ownRecords } from '../data/ops';
+import { roleKindFor } from '../data/access';
+import WarehouseDashboard from './WarehouseDashboard';
 import { sumByClass } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
@@ -18,6 +20,11 @@ export default function Overview() {
   const role = user?.role ?? '';
   const isWarehouse = ['Warehouse', 'Diagnostics Cashier', 'Pharmacy'].includes(role);
   const isAccounting = ['Accounting', 'CEO', 'HR', 'IT'].includes(role);
+
+  // Warehouse accounts get their own dashboard — never the accountant's
+  // financial summaries. Derived from the live user record every render, so
+  // switching accounts immediately swaps dashboards with no stale content.
+  if (roleKindFor(role) === 'warehouse') return <WarehouseDashboard />;
 
   return (
     <>
@@ -85,7 +92,7 @@ export default function Overview() {
   );
 }
 
-function MySubmissions({ txns, pos, userId, userName }: { txns: Txn[]; pos: PurchaseOrder[]; userId: string; userName: string }) {
+export function MySubmissions({ txns, pos, userId, userName }: { txns: Txn[]; pos: PurchaseOrder[]; userId: string; userName: string }) {
   const mine = ownRecords(txns, userId).slice(0, 5);
   const myPOs = ownRecords(pos, userId);
   const awaiting = mine.filter(t => !['Posted', 'Reversed'].includes(t.status)).length;

@@ -9,6 +9,7 @@ import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, condit
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
+import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS } from '../src/data/access.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
 import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
@@ -409,6 +410,45 @@ check('creator cannot self-approve or self-post',
   && guardTransition({ id: 'TXN-Y' }, 'Approved', 'jeann') === null);
 check('selectable types still Disbursement + Journal only',
   TRANSACTION_KINDS.join() === 'Disbursement,Journal');
+
+// ---- role isolation: JeAnn warehouse vs accounting ----
+check('jeann resolves to the existing Warehouse role',
+  roleKindFor('Warehouse') === 'warehouse'
+  && ['Accounting', 'CEO', 'HR', 'IT', 'Diagnostics Cashier', 'Pharmacy', ''].every(r => roleKindFor(r) === 'full'));
+const wNav = navFor('Warehouse', NAV);
+const wLabels = wNav.map(n => n.label);
+check('warehouse nav holds only dashboard + four areas + settings',
+  wLabels.join('|') === 'Overview|Transaction|Approval|Inventory|Purchasing (P.O.)|Settings', wLabels);
+const wTxnSubs = (wNav.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.label);
+check('warehouse transaction menu has no cash types or accounting links',
+  wTxnSubs.join('|') === 'New Entry / All Transactions|Type & Classification|Disbursement|Journal', wTxnSubs);
+check('no accountant-only destination leaks into warehouse nav',
+  !wNav.some(n => ACCOUNTING_ONLY_LABELS.includes(n.label)
+    || (n.subs ?? []).some(s => ACCOUNTING_ONLY_LABELS.includes(s.label))));
+const WH_OK = ['/admin', '/admin/transaction', '/admin/transaction-types', '/admin/disbursement', '/admin/journal', '/admin/approval', '/admin/inventory', '/admin/purchasing', '/admin/settings'];
+const WH_DENIED = ['/admin/accounting', '/admin/reports', '/admin/trial-balance', '/admin/income-expense', '/admin/financial-condition', '/admin/close', '/admin/cash-in', '/admin/cash-out', '/admin/business-units', '/admin/import-export'];
+check('warehouse route allow-list (query strings cannot bypass — path decides)',
+  WH_OK.every(p => canVisit('Warehouse', p)) && WH_DENIED.every(p => !canVisit('Warehouse', p)));
+check('warehouse dashboard has no financial panels',
+  WAREHOUSE_SECTIONS.join('|') === 'my-submissions|receiving-tasks|stock-levels|approval-tracking'
+  && !WAREHOUSE_SECTIONS.some(s => /revenue|expense|ledger|trial|income|audit|payable|receivable|bank|chart|equity/i.test(s)));
+check('warehouse approval is tracking-only (no decision actions)',
+  !canActOnApprovals('Warehouse')
+  && guardTransition({ id: 'T', createdBy: 'jeann' }, 'Approved', 'jeann') !== null
+  && guardTransition({ id: 'T', createdBy: 'jeann' }, 'Posted', 'jeann') !== null
+  && guardTransition({ id: 'T', createdBy: 'jeann' }, 'Rejected', 'jeann') === null);
+const switchToDani = { kind: roleKindFor('Accounting'), nav: navFor('Accounting', NAV).length, gl: canVisit('Accounting', '/admin/accounting'), act: canActOnApprovals('Accounting') };
+const switchToJoy = { kind: roleKindFor('CEO'), act: canActOnApprovals('CEO'), coa: canVisit('CEO', '/admin/accounting') };
+const backToJeann = { kind: roleKindFor('Warehouse'), nav: navFor('Warehouse', NAV).length, gl: canVisit('Warehouse', '/admin/accounting') };
+check('account switch restores correct dashboard/nav/routes both directions',
+  switchToDani.kind === 'full' && switchToDani.nav === NAV.length && switchToDani.gl && switchToDani.act
+  && switchToJoy.kind === 'full' && switchToJoy.act && switchToJoy.coa
+  && backToJeann.kind === 'warehouse' && backToJeann.nav === 6 && !backToJeann.gl);
+check('accounting keeps consolidated visibility + protections intact',
+  seedTransactions.length === 10
+  && canActOnApprovals('Accounting')
+  && !isAllowed('Draft' as never, 'Posted' as never)
+  && guardTransition({ id: 'T', createdBy: 'dani' }, 'Approved', 'dani') !== null);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

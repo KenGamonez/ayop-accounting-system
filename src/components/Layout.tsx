@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/AppStore';
+import { canVisit, navFor } from '../data/access';
 
 export interface Sub { to: string; label: string }
 export interface Item { to: string; label: string; end?: boolean; subs?: Sub[] }
@@ -70,8 +71,15 @@ export default function Layout() {
   const { user, logout } = useStore();
   const [open, setOpen] = useState(false);
   const nav = useNavigate();
-  const path = useLocation().pathname;
+  const loc = useLocation();
+  const path = loc.pathname;
   const close = () => setOpen(false);
+  // Centralized demo route guard: Warehouse accounts cannot deep-link into
+  // accountant-only screens (query strings can't bypass — the path decides).
+  if (user && !canVisit(user.role, path)) {
+    return <Navigate to="/admin" state={{ restricted: path }} replace />;
+  }
+  const items = navFor(user?.role ?? '', NAV);
   return (
     <div className="shell">
       <aside className={'sidebar' + (open ? ' open' : '')}>
@@ -80,7 +88,7 @@ export default function Layout() {
           <p>Ayop Group of Companies · Demo</p>
         </div>
         <nav className="nav">
-          {NAV.map(n => <Row key={n.to + n.label} item={n} path={path} onNav={close} />)}
+          {items.map(n => <Row key={n.to + n.label} item={n} path={path} onNav={close} />)}
         </nav>
         <div className="side-foot">Frontend demo · synthetic data only.<br />No backend connected.</div>
       </aside>
