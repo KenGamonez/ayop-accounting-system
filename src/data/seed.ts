@@ -72,6 +72,13 @@ export interface InventoryItem {
   reorderLevel: number;
 }
 
+export interface POLine {
+  item: string;
+  quantity: number;
+  supplierPrice: number;
+  receivedQty: number;
+}
+
 export interface PurchaseOrder {
   id: string;
   poNo: string;
@@ -79,7 +86,7 @@ export interface PurchaseOrder {
   supplier: string;
   businessUnit: string;
   deliveryDate: string;
-  items: { item: string; quantity: number; supplierPrice: number }[];
+  items: POLine[];
   total: number;
   received: boolean;
   receivedDate: string;
@@ -151,9 +158,9 @@ export const seedInventory: InventoryItem[] = [
 ];
 
 export const seedPOs: PurchaseOrder[] = [
-  { id: 'PO-1', poNo: 'PO-2026-0187', date: '2026-10-10', supplier: 'NephroCare Distributors', businessUnit: 'Dialysis Center', deliveryDate: '2026-10-17', items: [{ item: 'Dialyzer membrane F6', quantity: 30, supplierPrice: 1450 }], total: 43500, received: false, receivedDate: '', status: 'Sent to Supplier' },
-  { id: 'PO-2', poNo: 'PO-2026-0188', date: '2026-10-11', supplier: 'MedSupply Trading', businessUnit: 'Central Warehouse', deliveryDate: '2026-10-15', items: [{ item: 'Surgical gloves (latex)', quantity: 20, supplierPrice: 385 }], total: 7700, received: true, receivedDate: '2026-10-13', status: 'Received' },
-  { id: 'PO-3', poNo: 'PO-2026-0189', date: '2026-10-12', supplier: 'PaperLine Depot', businessUnit: 'Diagnostic Center', deliveryDate: '2026-10-16', items: [{ item: 'Bond paper A4', quantity: 40, supplierPrice: 260 }], total: 10400, received: false, receivedDate: '', status: 'Draft' },
+  { id: 'PO-1', poNo: 'PO-2026-0187', date: '2026-10-10', supplier: 'NephroCare Distributors', businessUnit: 'Dialysis Center', deliveryDate: '2026-10-17', items: [{ item: 'Dialyzer membrane F6', quantity: 30, supplierPrice: 1450, receivedQty: 0 }], total: 43500, received: false, receivedDate: '', status: 'Sent to Supplier' },
+  { id: 'PO-2', poNo: 'PO-2026-0188', date: '2026-10-11', supplier: 'MedSupply Trading', businessUnit: 'Central Warehouse', deliveryDate: '2026-10-15', items: [{ item: 'Surgical gloves (latex)', quantity: 20, supplierPrice: 385, receivedQty: 20 }], total: 7700, received: true, receivedDate: '2026-10-13', status: 'Received' },
+  { id: 'PO-3', poNo: 'PO-2026-0189', date: '2026-10-12', supplier: 'PaperLine Depot', businessUnit: 'Diagnostic Center', deliveryDate: '2026-10-16', items: [{ item: 'Bond paper A4', quantity: 40, supplierPrice: 260, receivedQty: 0 }], total: 10400, received: false, receivedDate: '', status: 'Draft' },
 ];
 
 export const seedJournal: JournalEntry[] = [

@@ -1,6 +1,8 @@
 // Frontend self-test for import/export logic. Run: node scripts/selftest.ts
 import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
+import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining } from '../src/data/ops.ts';
+import type { PurchaseOrder } from '../src/data/seed.ts';
 
 let pass = 0, fail = 0;
 function check(name: string, cond: boolean, extra?: unknown) {
@@ -61,6 +63,39 @@ check('csv quoting round-trips', rows.length === 3 && (rows[1] as unknown[])[0] 
 check('filename builder', fileName('transactions', 'csv', 'Pharmacy') === `transactions-pharmacy-${new Date().toISOString().slice(0, 10)}.csv`);
 check('sheets url converter', sheetsToCsvUrl('https://docs.google.com/spreadsheets/d/ABC123/edit#gid=0') === 'https://docs.google.com/spreadsheets/d/ABC123/export?format=csv&gid=0');
 check('sheets rejects non-url', sheetsToCsvUrl('not a link') === null);
+
+// ---- operational workflow: P.O. receipts ----
+const mkPO = (over: Partial<PurchaseOrder> = {}): PurchaseOrder => ({
+  id: 'PO-T', poNo: 'PO-TEST', date: '2026-10-10', supplier: 'MedSupply',
+  businessUnit: 'Pharmacy', deliveryDate: '2026-10-20',
+  items: [
+    { item: 'Gloves', quantity: 20, supplierPrice: 385, receivedQty: 0 },
+    { item: 'Masks', quantity: 10, supplierPrice: 100, receivedQty: 10 },
+  ],
+  total: 8700, received: false, receivedDate: '', status: 'Sent to Supplier', ...over,
+});
+check('line remaining math', lineRemaining(20, 0) === 20 && lineRemaining(10, 10) === 0);
+const r1 = applyReceipt(mkPO(), 0, 8, '2026-10-14');
+check('partial receipt updates line + status', !('error' in r1) && r1.po.items[0].receivedQty === 8 && r1.po.status === 'Partially Received' && r1.receivedValue === 3080 && !r1.fullyReceived, r1);
+const r2 = applyReceipt(mkPO(), 0, 25, '2026-10-14');
+check('over-receipt blocked (no double count)', 'error' in r2 && /double-count/.test(r2.error), r2);
+const r3 = applyReceipt(mkPO(), 1, 1, '2026-10-14');
+check('repeat receipt on full line blocked', 'error' in r3, r3);
+const full = mkPO({ items: [{ item: 'Gloves', quantity: 20, supplierPrice: 385, receivedQty: 12 }] });
+const r4 = applyReceipt(full, 0, 8, '2026-10-14');
+check('final receipt closes order', !('error' in r4) && r4.fullyReceived && r4.po.status === 'Received' && r4.po.received, r4);
+check('draft orders cannot receive', 'error' in applyReceipt(mkPO({ status: 'Draft' }), 0, 1, '2026-10-14'));
+check('cancelled orders cannot receive', 'error' in applyReceipt(mkPO({ status: 'Cancelled' }), 0, 1, '2026-10-14'));
+check('non-integer qty rejected', 'error' in applyReceipt(mkPO(), 0, 2.5, '2026-10-14'));
+check('zero qty rejected', 'error' in applyReceipt(mkPO(), 0, 0, '2026-10-14'));
+check('status derivation', derivePOStatus(10, 0, true, 'Sent to Supplier') === 'Sent to Supplier'
+  && derivePOStatus(10, 4, true, 'Sent to Supplier') === 'Partially Received'
+  && derivePOStatus(10, 10, true, 'Partially Received') === 'Received'
+  && derivePOStatus(10, 0, false, 'Draft') === 'Draft');
+check('inventory type defaults', defaultInventoryTypeFor('Pharmacy') === 'Pharmacy'
+  && defaultInventoryTypeFor('Diagnostic Center') === 'Laboratory'
+  && defaultInventoryTypeFor('Dialysis Center') === 'Dialysis'
+  && defaultInventoryTypeFor('Central Warehouse') === 'Admin');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

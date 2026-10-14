@@ -269,7 +269,7 @@ function ImportWizard() {
         store.addPO({
           poNo: String(d0.poNo), date: d0.date as string, supplier: String(d0.supplier),
           businessUnit: d0.businessUnit as string, deliveryDate: d0.deliveryDate as string,
-          items: rows.map(r => ({ item: String(r.data.item), quantity: r.data.quantity as number, supplierPrice: r.data.supplierPrice as number })),
+          items: rows.map(r => ({ item: String(r.data.item), quantity: r.data.quantity as number, supplierPrice: r.data.supplierPrice as number, receivedQty: 0 })),
           received: false, receivedDate: '', status: 'Draft',
         });
         imported += rows.length;
