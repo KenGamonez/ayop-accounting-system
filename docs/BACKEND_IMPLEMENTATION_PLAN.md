@@ -179,3 +179,7 @@ rules — never frontend-only:
   opening-balance sources for cutover.
 - **Next slice**: Slice 1 per `PROJECT_STATE.md` — do not start it until
   the owner acknowledges this plan.
+
+## 9. Forensic-study addendum (2026-10-14)
+
+Pre-backend code trace at 44656ff produced docs/FRONTEND_WORKFLOW_SPEC.md (operation contracts, accounting-model gaps) and docs/REQUIREMENTS_TO_CODE_MATRIX.md (30-row evidence table). Key confirmations feeding the slices above: single-sided demo postings, presentation-only permissions, advisory close, no costing method, cash flow limited to explicit Cash In/Out kinds. No app code changed by the study.

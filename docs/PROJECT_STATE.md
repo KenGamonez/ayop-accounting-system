@@ -69,3 +69,11 @@ start until the owner acknowledges the plan.
   production route responds); confirmed zero backend footprint; recorded
   Bislig Hub as unrelated; wrote backend plan + this state file. Next:
   Slice 1 on owner acknowledgement.
+- 2026-10-14 — Forensic study (pre-backend): traced all routes, store
+  operations, finance builders, guards, and import/export against the code
+  at `44656ff`; produced `docs/FRONTEND_WORKFLOW_SPEC.md` (workflows,
+  accounting model, backend operation contracts) and
+  `docs/REQUIREMENTS_TO_CODE_MATRIX.md` (30-row evidence matrix). No app
+  code changed. Confirmed: single-sided demo model, presentation-only
+  permissions, advisory close, no costing method, no settlement modeling.
+  Next: Slice 1 on owner acknowledgement (unchanged).
