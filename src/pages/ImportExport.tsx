@@ -2,11 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, COA, peso } from '../data/seed';
 import {
-  DATA_TYPES, DataType, autoMap, validateRows, dupKey, toCSV, fileName,
+  DATA_TYPES, DataType, autoMap, validateRows, dupKey, toCSV, fileName, importIdemKey,
   sheetsToCsvUrl, ValidatedRow,
 } from '../data/io';
 import { sumByClass, trialBalance } from '../data/finance';
-import { useStore } from '../store/AppStore';
+import { loadSuppliers, useStore } from '../store/AppStore';
 import { PageHead, Pill } from '../components/ui';
 import { download } from '../components/download';
 
@@ -18,16 +18,8 @@ interface HistoryEntry {
   errors: number; duplicates: number; skipped: number; imported: number;
 }
 const HIST_KEY = 'jem51-demo-v1:imports';
-const SUP_KEY = 'jem51-demo-v1:suppliers';
 function loadHist(): HistoryEntry[] {
   try { return JSON.parse(localStorage.getItem(HIST_KEY) ?? '[]'); } catch { return []; }
-}
-export function loadSuppliers(fallback: string[]): { supplier: string; contact: string; phone: string; address: string; terms: string }[] {
-  try {
-    const raw = localStorage.getItem(SUP_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* ignore */ }
-  return fallback.map(s => ({ supplier: s, contact: '', phone: '', address: '', terms: '' }));
 }
 
 const STEPS = ['Data type', 'Get file', 'Map columns', 'Review', 'Confirm', 'Done'];
@@ -73,7 +65,8 @@ function ImportWizard() {
     const s = new Set<string>();
     if (type === 'transactions') store.txns.forEach(t => { const k = dupKey(type, { date: t.date, businessUnit: t.businessUnit, item: t.item, supplier: t.supplier, amount: t.amount }); if (k) s.add(k); });
     if (type === 'inventory') store.inventory.forEach(i => { const k = dupKey(type, { businessUnit: i.businessUnit, item: i.item }); if (k) s.add(k); });
-    if (type === 'suppliers') loadSuppliers([]).forEach(x => { const k = dupKey(type, x); if (k) s.add(k); });
+    if (type === 'suppliers' && store.mode !== 'live') loadSuppliers([]).forEach(x => { const k = dupKey(type, x as unknown as Record<string, unknown>); if (k) s.add(k); });
+    // Live suppliers resolve duplicates server-side (idempotent upsert), so no local pre-check.
     if (type === 'purchase_orders') store.pos.forEach(p => p.items.forEach(it => { const k = dupKey(type, { poNo: p.poNo, item: it.item, quantity: it.quantity }); if (k) s.add(k); }));
     if (type === 'opening_balances') store.journal.forEach(j => { if (j.sourceTxn === 'OPENING') s.add('ob-imported'); });
     return s;
@@ -209,6 +202,7 @@ function ImportWizard() {
     let imported = 0, skipped = nErr;
     let firstError = '';
     const me = store.user?.name ?? 'Demo user';
+    const live = store.mode === 'live';
     if (type === 'transactions') {
       for (const r of validated) {
         if (r.errors.length) continue;
@@ -222,8 +216,8 @@ function ImportWizard() {
             supplierPrice: d.supplierPrice as number, retailPrice: d.retailPrice as number,
             quantity: d.quantity as number, amount: d.amount as number,
             accountCode: '5000', accountName: 'Medical Supplies Expense',
-            enteredBy: me, remarks: `Demo import from ${fileName_} — awaiting accountant review`,
-          });
+            enteredBy: me, remarks: `Import from ${fileName_} — awaiting accountant review${live ? ' (live, never auto-posted)' : ''}`,
+          }, importIdemKey(fileName_, type, r.index));
           imported++;
         } catch (e) {
           skipped++;
@@ -245,7 +239,7 @@ function ImportWizard() {
             category: d.category as string, quantity: d.quantity as number, amount: d.amount as number,
             supplier: String(d.supplier), supplierPrice: d.supplierPrice as number,
             retailPrice: d.retailPrice as number, reorderLevel: d.reorderLevel as number,
-          });
+          }, importIdemKey(fileName_, type, r.index));
           imported++;
         } catch (e) {
           skipped++;
@@ -255,19 +249,24 @@ function ImportWizard() {
       if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'suppliers') {
-      const cur = loadSuppliers([]);
-      const names = new Set(cur.map(s => s.supplier.toLowerCase()));
-      const next = [...cur];
-      validated.forEach(r => {
-        if (r.errors.length) return;
+      for (const r of validated) {
+        if (r.errors.length) continue;
         const d = r.data;
-        if (names.has(String(d.supplier).toLowerCase())) { skipped++; return; }
-        names.add(String(d.supplier).toLowerCase());
-        next.push({ supplier: String(d.supplier), contact: String(d.contact ?? ''), phone: String(d.phone ?? ''), address: String(d.address ?? ''), terms: String(d.terms ?? '') });
-        imported++;
-      });
-      try { localStorage.setItem(SUP_KEY, JSON.stringify(next)); } catch { /* ignore */ }
-      store.log('Supplier directory updated (demo import)', fileName_, `${imported} added, ${skipped} skipped.`);
+        try {
+          await store.upsertSupplier({
+            supplier: String(d.supplier), contact: String(d.contact ?? ''),
+            phone: String(d.phone ?? ''), address: String(d.address ?? ''),
+            terms: String(d.terms ?? ''),
+          });
+          imported++;
+        } catch (e) {
+          skipped++;
+          if (!firstError) firstError = e instanceof Error ? e.message : 'Row failed to save.';
+        }
+      }
+      if (live) store.log('Supplier import (live)', fileName_, `${imported} saved, ${skipped} skipped.`);
+      else store.log('Supplier directory updated (demo import)', fileName_, `${imported} added, ${skipped} skipped.`);
+      if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'purchase_orders') {
       const groups = new Map<string, ValidatedRow[]>();
@@ -286,7 +285,7 @@ function ImportWizard() {
             businessUnit: d0.businessUnit as string, deliveryDate: d0.deliveryDate as string,
             items: rows.map(r => ({ item: String(r.data.item), quantity: r.data.quantity as number, supplierPrice: r.data.supplierPrice as number, receivedQty: 0 })),
             received: false, receivedDate: '', status: 'Draft',
-          });
+          }, importIdemKey(fileName_, type, rows[0].index));
           imported += rows.length;
         } catch (e) {
           skipped += rows.length;
@@ -296,23 +295,30 @@ function ImportWizard() {
       if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'opening_balances') {
-      const ref = 'OB-' + new Date().toISOString().slice(0, 10);
-      validated.forEach(r => {
-        if (r.errors.length) return;
-        const d = r.data;
-        const dr = (d.debit as number) ?? 0;
-        const acct = `${d.accountCode} — ${COA.find(c => c.code === d.accountCode)?.name ?? ''}`;
-        store.addJournal({
-          date: d.date as string, ref,
-          particulars: `OPENING BALANCE (demo, controlled import) — ${d.particulars}. Correct accounts before posting.`,
-          businessUnit: d.businessUnit as string,
-          debitAccount: dr > 0 ? acct : '3999 — Opening Balance Offset (demo)',
-          creditAccount: dr > 0 ? '3999 — Opening Balance Offset (demo)' : acct,
-          amount: dr > 0 ? dr : ((d.credit as number) ?? 0),
-          status: 'Draft', sourceTxn: 'OPENING',
+      if (live) {
+        // No approved mapping exists for opening balances into live
+        // accounting records — blocked explicitly, never written partially.
+        setProblem('Opening-balance import is blocked in live mode: no approved account mapping exists yet. Use demo mode to preview, or wait for the approved mapping.');
+        skipped += validated.filter(r => !r.errors.length).length;
+      } else {
+        const ref = 'OB-' + new Date().toISOString().slice(0, 10);
+        validated.forEach(r => {
+          if (r.errors.length) return;
+          const d = r.data;
+          const dr = (d.debit as number) ?? 0;
+          const acct = `${d.accountCode} — ${COA.find(c => c.code === d.accountCode)?.name ?? ''}`;
+          store.addJournal({
+            date: d.date as string, ref,
+            particulars: `OPENING BALANCE (demo, controlled import) — ${d.particulars}. Correct accounts before posting.`,
+            businessUnit: d.businessUnit as string,
+            debitAccount: dr > 0 ? acct : '3999 — Opening Balance Offset (demo)',
+            creditAccount: dr > 0 ? '3999 — Opening Balance Offset (demo)' : acct,
+            amount: dr > 0 ? dr : ((d.credit as number) ?? 0),
+            status: 'Draft', sourceTxn: 'OPENING',
+          });
+          imported++;
         });
-        imported++;
-      });
+      }
     }
     const entry: HistoryEntry = {
       at, type: def.label, file: fileName_, valid: nValid, warnings: nWarn,
@@ -567,7 +573,7 @@ function ExportCenter() {
     { title: 'Transactions', desc: 'Filtered demo transactions with statuses.', count: `${txns.length} rows`, csv: () => csvOut(fileName('transactions', 'csv', unit), txnHeaders, txnRows()), xlsx: () => xlsxOut(fileName('transactions', 'xlsx', unit), 'Transactions', txnObjs()) },
     { title: 'Inventory', desc: 'Stock list with supplier and retail prices.', count: `${inv.length} rows`, csv: () => csvOut(fileName('inventory', 'csv', unit), invHeaders, invRows()), xlsx: () => xlsxOut(fileName('inventory', 'xlsx', unit), 'Inventory', invObjs()) },
     { title: 'Purchase Orders', desc: 'Orders flattened to one row per line.', count: `${poObjs().length} lines`, csv: () => csvOut(fileName('purchase-orders', 'csv'), ['P.O. No.', 'Date', 'Supplier', 'Business Unit', 'Delivery Date', 'Item', 'Quantity', 'Supplier Price', 'Line Total', 'Status'], poObjs().map(o => [o['P.O. No.'], o.Date, o.Supplier, o['Business Unit'], o['Delivery Date'], o.Item, o.Quantity, o['Supplier Price'], o['Line Total'], o.Status])), xlsx: () => xlsxOut(fileName('purchase-orders', 'xlsx'), 'PurchaseOrders', poObjs()) },
-    { title: 'Suppliers', desc: 'Supplier directory (demo).', count: `${loadSuppliers([]).length} rows`, csv: () => { const s = loadSuppliers([]); csvOut(fileName('suppliers', 'csv'), ['Supplier', 'Contact Person', 'Phone', 'Address', 'Terms'], s.map(x => [x.supplier, x.contact, x.phone, x.address, x.terms])); }, xlsx: () => xlsxOut(fileName('suppliers', 'xlsx'), 'Suppliers', loadSuppliers([])) },
+    { title: 'Suppliers', desc: 'Supplier directory (demo).', count: `${loadSuppliers([]).length} rows`, csv: () => { const s = loadSuppliers([]); csvOut(fileName('suppliers', 'csv'), ['Supplier', 'Contact Person', 'Phone', 'Address', 'Terms'], s.map(x => [x.supplier, x.contact, x.phone, x.address, x.terms])); }, xlsx: () => xlsxOut(fileName('suppliers', 'xlsx'), 'Suppliers', loadSuppliers([]) as unknown as Record<string, unknown>[]) },
     { title: 'Trial Balance', desc: 'Posted balances for the selected unit and dates.', count: `${tb.length} accounts`, csv: () => csvOut(fileName('trial-balance', 'csv', unit), ['Account', 'Debit', 'Credit'], tb.map(r => [r.Account, r.Debit, r.Credit])), xlsx: () => xlsxOut(fileName('trial-balance', 'xlsx', unit), 'TrialBalance', tb) },
     { title: 'Chart of Accounts', desc: 'Reference account structure (demo).', count: `${COA.length} accounts`, csv: () => csvOut(fileName('chart-of-accounts', 'csv'), ['Code', 'Name', 'Type'], COA.map(a => [a.code, a.name, a.type])), xlsx: () => xlsxOut(fileName('chart-of-accounts', 'xlsx'), 'ChartOfAccounts', COA) },
     { title: 'Business Units', desc: 'Reference list with posted demo performance.', count: '9 units', csv: () => csvOut(fileName('business-units', 'csv'), ['Business Unit', 'Posted Revenue', 'Posted Expenses'], BUSINESS_UNITS.map(u => [u, sumByClass(store.txns, { unit: u, from, to }, 'Revenue'), sumByClass(store.txns, { unit: u, from, to }, 'Expense')])), xlsx: () => xlsxOut(fileName('business-units', 'xlsx'), 'BusinessUnits', BUSINESS_UNITS.map(u => ({ 'Business Unit': u }))) },

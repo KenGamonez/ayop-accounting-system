@@ -398,3 +398,18 @@ export async function updateLiveItem(client: SupabaseClient, id: string, patch: 
   const { error } = await client.rpc('update_inventory_item', { p_id: id, p: allowed });
   if (error) throw new Error(mapRpcError(error));
 }
+
+export interface SupplierDraft {
+  supplier: string;
+  contact: string;
+  phone: string;
+  address: string;
+  terms: string;
+}
+
+export async function upsertLiveSupplier(client: SupabaseClient, s: SupplierDraft): Promise<void> {
+  const { error } = await client.rpc('upsert_supplier', {
+    p: { name: s.supplier, contact: s.contact, phone: s.phone, address: s.address, terms: s.terms },
+  });
+  if (error) throw new Error(mapRpcError(error));
+}

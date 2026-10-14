@@ -7,7 +7,7 @@ import {
   createLiveTxn, listLiveTxns, mapRpcError, membershipToStaff, resolveLiveMembership,
   reverseLiveTxn, signInLive, signOutLive, transitionLiveTxn,
   addLiveItem, adjustLiveStock, cancelLivePO, createLivePO, listLiveInventory,
-  listLivePOs, recordLiveReceipt, sendLivePO, updateLiveItem,
+  listLivePOs, recordLiveReceipt, sendLivePO, updateLiveItem, upsertLiveSupplier,
   type LiveMembership, type TxnDraft,
 } from '../data/live';
 
@@ -40,16 +40,17 @@ interface Store {
   liveLogout: () => Promise<void>;
   refreshLiveTxns: () => Promise<void>;
   txns: Txn[];
-  addTxn: (t: Omit<Txn, 'id' | 'status'>) => Promise<Txn>;
+  addTxn: (t: Omit<Txn, 'id' | 'status'>, idemKey?: string) => Promise<Txn>;
   transition: (id: string, to: TxnStatus, note?: string, actorId?: string) => Promise<{ ok: boolean; message: string }>;
   reverseTxn: (id: string) => Promise<{ ok: boolean; message: string }>;
   inventory: InventoryItem[];
   adjustInventory: (id: string, delta: number, reason?: string) => Promise<void>;
   setInventoryQty: (id: string, qty: number, reason?: string) => Promise<void>;
-  addInventoryItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
+  addInventoryItem: (item: Omit<InventoryItem, 'id'>, idemKey?: string) => Promise<void>;
   updateInventoryItem: (id: string, patch: Partial<Omit<InventoryItem, 'id' | 'quantity'>>) => Promise<void>;
+  upsertSupplier: (s: SupplierDirEntry) => Promise<void>;
   pos: PurchaseOrder[];
-  addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>) => Promise<void>;
+  addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>, idemKey?: string) => Promise<void>;
   sendPO: (id: string) => Promise<void>;
   cancelPO: (id: string) => Promise<void>;
   receivePOLine: (id: string, lineIdx: number, qty: number) => Promise<{ ok: boolean; message: string }>;
@@ -63,6 +64,18 @@ interface Store {
 
 const Ctx = createContext<Store | null>(null);
 const KEY = 'jem51-demo-v1';
+
+export interface SupplierDirEntry { supplier: string; contact: string; phone: string; address: string; terms: string; }
+const SUP_KEY = 'jem51-demo-v1:suppliers';
+
+/** Demo supplier directory (browser-local). Live mode uses the Supabase table instead. */
+export function loadSuppliers(fallback: string[]): SupplierDirEntry[] {
+  try {
+    const raw = localStorage.getItem(SUP_KEY);
+    if (raw) return JSON.parse(raw);
+  } catch { /* ignore */ }
+  return fallback.map(s => ({ supplier: s, contact: '', phone: '', address: '', terms: '' }));
+}
 
 function load<T>(k: string, fb: T): T {
   try {
@@ -262,10 +275,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       setTxns(await listLiveTxns(liveClient()));
     },
     txns,
-    addTxn: async (t) => {
+    addTxn: async (t, idemKey) => {
       if (LIVE_MODE) {
         if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
-        const created = await createLiveTxn(liveClient(), toDraft(t), `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        const created = await createLiveTxn(liveClient(), toDraft(t), idemKey ?? `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
         await refreshLiveTxnsSafe();
         return created;
       }
@@ -364,7 +377,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const item = inventory.find(i => i.id === id);
       log('Inventory quantity set', item?.item ?? id, `Set to ${Math.max(0, qty)}${reason ? ' — ' + reason : ''} · demo only`);
     },
-    addInventoryItem: async (item) => {
+    addInventoryItem: async (item, idemKey) => {
       if (LIVE_MODE) {
         if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
         await addLiveItem(liveClient(), {
@@ -372,7 +385,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           category: item.category, quantity: item.quantity, amount: item.amount,
           supplier: item.supplier, supplierPrice: item.supplierPrice,
           retailPrice: item.retailPrice, reorderLevel: item.reorderLevel,
-        }, `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        }, idemKey ?? `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
         await loadLiveAll();
         return;
       }
@@ -391,15 +404,41 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const item = inventory.find(i => i.id === id);
       log('Inventory item edited', item?.item ?? id, Object.keys(patch).join(', ') + ' · demo only');
     },
+    upsertSupplier: async (s) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await upsertLiveSupplier(liveClient(), s);
+        return;
+      }
+      try {
+        const raw = localStorage.getItem(SUP_KEY);
+        const cur: SupplierDirEntry[] = raw ? JSON.parse(raw) : [];
+        const ix = cur.findIndex(x => x.supplier.toLowerCase() === s.supplier.toLowerCase());
+        if (ix >= 0) {
+          const prev = cur[ix];
+          cur[ix] = {
+            supplier: prev.supplier,
+            contact: s.contact.trim() || prev.contact,
+            phone: s.phone.trim() || prev.phone,
+            address: s.address.trim() || prev.address,
+            terms: s.terms.trim() || prev.terms,
+          };
+        } else {
+          cur.push({ ...s });
+        }
+        localStorage.setItem(SUP_KEY, JSON.stringify(cur));
+      } catch { /* private mode */ }
+      log('Supplier directory updated (demo import)', s.supplier, 'demo directory');
+    },
     pos,
-    addPO: async (po) => {
+    addPO: async (po, idemKey) => {
       if (LIVE_MODE) {
         if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
         await createLivePO(liveClient(), {
           poNo: po.poNo, date: po.date, supplier: po.supplier,
           businessUnit: po.businessUnit, deliveryDate: po.deliveryDate,
           items: po.items.map(l => ({ item: l.item, quantity: l.quantity, supplierPrice: l.supplierPrice })),
-        }, `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        }, idemKey ?? `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
         await loadLiveAll();
         return;
       }

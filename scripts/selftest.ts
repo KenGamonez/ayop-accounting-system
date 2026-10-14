@@ -1,6 +1,6 @@
 // Frontend self-test for import/export logic. Run: node scripts/selftest.ts
 import * as XLSX from 'xlsx';
-import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
+import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, importIdemKey, sheetsToCsvUrl } from '../src/data/io.ts';
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed,
 nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS, validateDisbursement, inDateRange,
 dateRangeError, journalTotals, validateJournal, staffIdForName, canActOnApprovals, isCreator,
@@ -708,6 +708,23 @@ check('inventory payload whitelists fields (quantity never smuggled via update p
     business_unit: 'Pharmacy', type: 'Pharmacy', item: 'P', category: 'Medical Supplies',
     quantity: 5, amount: 800, supplier: 'S', supplier_price: 160, retail_price: 220, reorder_level: 10,
   }));
+
+// ---- slice 5: safe import pipeline ----
+const mig6 = readFileSync('supabase/migrations/20261014000006_supplier_upsert.sql', 'utf8');
+check('supplier upsert RPC validates, merges, audits (no direct writes)',
+  mig6.includes('create or replace function public.upsert_supplier')
+  && mig6.includes('BAD_SUPPLIER') && mig6.includes('NOT_LINKED')
+  && mig6.includes('on conflict (name) do update')
+  && mig6.includes("'Supplier saved'")
+  && !/create policy[^;]*for (insert|update|delete)/i.test(mig6)
+  && mig6.includes('grant execute on function public.upsert_supplier(jsonb) to authenticated')
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig6.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, '')));
+check('import idempotency keys are deterministic per file/type/row',
+  importIdemKey('PO List.xlsx', 'purchase_orders', 3) === importIdemKey('PO List.xlsx', 'purchase_orders', 3)
+  && importIdemKey('PO List.xlsx', 'purchase_orders', 3) !== importIdemKey('PO List.xlsx', 'purchase_orders', 4)
+  && importIdemKey('PO List.xlsx', 'purchase_orders', 3) !== importIdemKey('Other.csv', 'purchase_orders', 3)
+  && importIdemKey('PO List.xlsx', 'transactions', 3) !== importIdemKey('PO List.xlsx', 'purchase_orders', 3)
+  && /^[a-z0-9-]+$/.test(importIdemKey('My File (final) v2.XLSX', 'inventory', 0)));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

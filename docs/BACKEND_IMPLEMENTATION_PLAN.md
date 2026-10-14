@@ -198,3 +198,6 @@ Draft-cancellation lifecycle only (migration 20261014000004, verified: grants, a
 ## 14. Slice 4 implementation record (2026-10-14)
 
 Migration 20261014000005 applied and verified (6 ops tables, receipt/move ledgers, 7 RPCs, SELECT-only RLS, authenticated-only EXECUTE; all tables empty). Receiving is atomic (stock + payable transaction row, never a journal). Frontend delegates PO/inventory/receipt actions live with demo behavior unchanged. Provisioning (0/7) and Gate-1 still block e2e + posting. Next: Slice 3 per PROJECT_STATE.md.
+## 15. Slice 5 implementation record (2026-10-14)
+
+Migration 20261014000006 applied and verified (upsert_supplier, authenticated-only EXECUTE, anon denied, no direct-write policies). Live import routing with deterministic idempotency keys; OB blocked live. Provisioning (0/7) and Gate-1 still block e2e + posting. Next: Slice 3 per PROJECT_STATE.md.

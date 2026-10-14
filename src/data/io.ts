@@ -387,6 +387,16 @@ export function fileName(base: string, ext: string, unit?: string): string {
   return `${base}${u}-${d}.${ext}`;
 }
 
+/**
+ * Deterministic idempotency key for one import row, so retrying the same
+ * file neither duplicates records nor silently drops them — the server
+ * returns the prior outcome for a repeated key.
+ */
+export function importIdemKey(file: string, type: string, index: number): string {
+  const slug = (file || 'file').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'file';
+  return `imp-${type}-${slug}-${index}`;
+}
+
 // Google Sheets: accept published CSV links or convert /edit URLs to export URLs.
 export function sheetsToCsvUrl(input: string): string | null {
   const s = input.trim();
