@@ -233,20 +233,26 @@ function ImportWizard() {
       if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'inventory') {
-      validated.forEach(r => {
-        if (r.errors.length) return;
+      for (const r of validated) {
+        if (r.errors.length) continue;
         const d = r.data;
-        const match = store.inventory.find(i => i.businessUnit === d.businessUnit && String(i.item).toLowerCase() === String(d.item).toLowerCase());
-        if (match && invMode === 'skip') { skipped++; return; }
-        if (match && invMode === 'update') { store.setInventoryQty(match.id, d.quantity as number); imported++; return; }
-        store.addInventoryItem({
-          businessUnit: d.businessUnit as string, type: d.type as string, item: String(d.item),
-          category: d.category as string, quantity: d.quantity as number, amount: d.amount as number,
-          supplier: String(d.supplier), supplierPrice: d.supplierPrice as number,
-          retailPrice: d.retailPrice as number, reorderLevel: d.reorderLevel as number,
-        });
-        imported++;
-      });
+        try {
+          const match = store.inventory.find(i => i.businessUnit === d.businessUnit && String(i.item).toLowerCase() === String(d.item).toLowerCase());
+          if (match && invMode === 'skip') { skipped++; continue; }
+          if (match && invMode === 'update') { await store.setInventoryQty(match.id, d.quantity as number); imported++; continue; }
+          await store.addInventoryItem({
+            businessUnit: d.businessUnit as string, type: d.type as string, item: String(d.item),
+            category: d.category as string, quantity: d.quantity as number, amount: d.amount as number,
+            supplier: String(d.supplier), supplierPrice: d.supplierPrice as number,
+            retailPrice: d.retailPrice as number, reorderLevel: d.reorderLevel as number,
+          });
+          imported++;
+        } catch (e) {
+          skipped++;
+          if (!firstError) firstError = e instanceof Error ? e.message : 'Row failed to save.';
+        }
+      }
+      if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'suppliers') {
       const cur = loadSuppliers([]);
@@ -272,16 +278,22 @@ function ImportWizard() {
         if (!groups.has(k)) groups.set(k, []);
         groups.get(k)!.push(r);
       });
-      groups.forEach(rows => {
+      for (const rows of groups.values()) {
         const d0 = rows[0].data;
-        store.addPO({
-          poNo: String(d0.poNo), date: d0.date as string, supplier: String(d0.supplier),
-          businessUnit: d0.businessUnit as string, deliveryDate: d0.deliveryDate as string,
-          items: rows.map(r => ({ item: String(r.data.item), quantity: r.data.quantity as number, supplierPrice: r.data.supplierPrice as number, receivedQty: 0 })),
-          received: false, receivedDate: '', status: 'Draft',
-        });
-        imported += rows.length;
-      });
+        try {
+          await store.addPO({
+            poNo: String(d0.poNo), date: d0.date as string, supplier: String(d0.supplier),
+            businessUnit: d0.businessUnit as string, deliveryDate: d0.deliveryDate as string,
+            items: rows.map(r => ({ item: String(r.data.item), quantity: r.data.quantity as number, supplierPrice: r.data.supplierPrice as number, receivedQty: 0 })),
+            received: false, receivedDate: '', status: 'Draft',
+          });
+          imported += rows.length;
+        } catch (e) {
+          skipped += rows.length;
+          if (!firstError) firstError = e instanceof Error ? e.message : 'Order failed to save.';
+        }
+      }
+      if (firstError) setProblem(`Some rows could not be saved and were skipped (not silently dropped): ${firstError}`);
     }
     if (type === 'opening_balances') {
       const ref = 'OB-' + new Date().toISOString().slice(0, 10);

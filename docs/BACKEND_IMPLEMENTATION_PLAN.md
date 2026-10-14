@@ -195,3 +195,6 @@ Migration 20261014000003 applied and remotely verified (journal_entries + journa
 ## 13. Slice 3 prep, continued (2026-10-14)
 
 Draft-cancellation lifecycle only (migration 20261014000004, verified: grants, anon denial, 0 rows). Posting, mapping, Approve Income, opening balances, and costing remain blocked on Gate-1 + provisioning. Next: Slice 3 posting per PROJECT_STATE.md.
+## 14. Slice 4 implementation record (2026-10-14)
+
+Migration 20261014000005 applied and verified (6 ops tables, receipt/move ledgers, 7 RPCs, SELECT-only RLS, authenticated-only EXECUTE; all tables empty). Receiving is atomic (stock + payable transaction row, never a journal). Frontend delegates PO/inventory/receipt actions live with demo behavior unchanged. Provisioning (0/7) and Gate-1 still block e2e + posting. Next: Slice 3 per PROJECT_STATE.md.

@@ -27,7 +27,7 @@ export default function Inventory() {
   const totalVal = rows.reduce((s, i) => s + i.amount, 0);
   const low = rows.filter(i => i.quantity <= i.reorderLevel);
 
-  const submitAdd = () => {
+  const submitAdd = async () => {
     if (!add.item.trim()) return setAddErr('Item is required.');
     if (!add.supplier.trim()) return setAddErr('Supplier is required.');
     const qty = toNum(add.quantity);
@@ -38,11 +38,16 @@ export default function Inventory() {
     if (inventory.some(i => i.businessUnit === add.businessUnit && i.item.toLowerCase() === add.item.trim().toLowerCase()))
       return setAddErr('That Item already exists in this Business Unit — edit it below or receive a P.O. instead of duplicating.');
     setAddErr('');
-    addInventoryItem({
-      businessUnit: add.businessUnit, type: add.type, item: add.item.trim(),
-      category: add.category, quantity: qty, amount: sp * qty, supplier: add.supplier.trim(),
-      supplierPrice: sp, retailPrice: rp, reorderLevel: rl,
-    });
+    try {
+      await addInventoryItem({
+        businessUnit: add.businessUnit, type: add.type, item: add.item.trim(),
+        category: add.category, quantity: qty, amount: sp * qty, supplier: add.supplier.trim(),
+        supplierPrice: sp, retailPrice: rp, reorderLevel: rl,
+      });
+    } catch (e) {
+      setAddErr(e instanceof Error ? e.message : 'Could not add the item.');
+      return;
+    }
     setAdd(blank); setShowAdd(false);
     setNote(`Added “${add.item.trim()}” (${add.businessUnit}) — demo entry, visible above.`);
   };
@@ -51,12 +56,17 @@ export default function Inventory() {
     setEditing(i.id);
     setEdit({ type: i.type, category: i.category, supplier: i.supplier, supplierPrice: String(i.supplierPrice), retailPrice: String(i.retailPrice), reorderLevel: String(i.reorderLevel) });
   };
-  const saveEdit = (id: string) => {
+  const saveEdit = async (id: string) => {
     const sp = toNum(edit.supplierPrice), rp = toNum(edit.retailPrice), rl = toNum(edit.reorderLevel);
     if (!edit.supplier.trim()) return setNote('Supplier cannot be empty — edit discarded.');
     if (sp === null || sp < 0 || rp === null || rp < 0) return setNote('Prices cannot be negative — edit discarded.');
     if (rl === null || !Number.isInteger(rl) || rl < 0) return setNote('Reorder Level must be a whole number ≥ 0 — edit discarded.');
-    updateInventoryItem(id, { type: edit.type, category: edit.category, supplier: edit.supplier.trim(), supplierPrice: sp, retailPrice: rp, reorderLevel: rl });
+    try {
+      await updateInventoryItem(id, { type: edit.type, category: edit.category, supplier: edit.supplier.trim(), supplierPrice: sp, retailPrice: rp, reorderLevel: rl });
+    } catch (e) {
+      setNote(e instanceof Error ? e.message : 'Edit failed.');
+      return;
+    }
     setEditing(null);
     setNote('Item updated. Quantity is intentionally not editable here — use Adjust or P.O. receiving so every change is logged.');
   };
@@ -132,8 +142,8 @@ export default function Inventory() {
                 </div>
               ) : (
                 <div className="btn-row">
-                  <button className="btn small ghost" onClick={() => { adjustInventory(i.id, 1, `manual +1 by ${user?.name ?? 'demo'}`); }}>+1</button>
-                  <button className="btn small ghost" onClick={() => { adjustInventory(i.id, -1, `manual −1 by ${user?.name ?? 'demo'}`); }}>−1</button>
+                  <button className="btn small ghost" onClick={async () => { try { await adjustInventory(i.id, 1, `manual +1 by ${user?.name ?? 'demo'}`); } catch (e) { setNote(e instanceof Error ? e.message : 'Adjustment failed.'); } }}>+1</button>
+                  <button className="btn small ghost" onClick={async () => { try { await adjustInventory(i.id, -1, `manual −1 by ${user?.name ?? 'demo'}`); } catch (e) { setNote(e instanceof Error ? e.message : 'Adjustment failed.'); } }}>−1</button>
                   <button className="btn small ghost" onClick={() => startEdit(i)}>Edit</button>
                 </div>
               )}</td>

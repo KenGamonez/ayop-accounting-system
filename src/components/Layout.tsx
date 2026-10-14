@@ -101,7 +101,7 @@ export default function Layout() {
         <nav className="nav">
           {items.map(n => <Row key={n.to + n.label} item={n} path={path} onNav={close} />)}
         </nav>
-        <div className="side-foot">{mode === 'live' ? <>Live Supabase backend · transactions + approvals.<br />Inventory/POs/journal stay demo-local.</> : <>Frontend demo · synthetic data only.<br />No backend connected.</>}</div>
+        <div className="side-foot">{mode === 'live' ? <>Live Supabase backend · txns, approvals, POs, inventory.<br />Journal drafts stay demo-local.</> : <>Frontend demo · synthetic data only.<br />No backend connected.</>}</div>
       </aside>
       <div className="main">
         <div className="topbar">
@@ -135,7 +135,7 @@ export default function Layout() {
         )}
         {mode === 'live' && (
         <div className="demo-banner" style={{ background: '#e6f4ec', borderColor: '#bfe3cd', color: '#157347' }}>
-          <strong>Live mode</strong> — transaction records come from the shared Supabase backend. Inventory, purchasing, and journal drafts remain demo-local in Slice 2.
+          <strong>Live mode</strong> — transactions, approvals, purchasing, and inventory come from the shared Supabase backend. Journal drafts stay demo-local in Slice 4.
         </div>
         )}
         {mode === 'setup-error' && (

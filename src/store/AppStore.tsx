@@ -6,6 +6,8 @@ import { getSupabaseClient, readBackendEnv, resolveBackendMode } from '../data/b
 import {
   createLiveTxn, listLiveTxns, mapRpcError, membershipToStaff, resolveLiveMembership,
   reverseLiveTxn, signInLive, signOutLive, transitionLiveTxn,
+  addLiveItem, adjustLiveStock, cancelLivePO, createLivePO, listLiveInventory,
+  listLivePOs, recordLiveReceipt, sendLivePO, updateLiveItem,
   type LiveMembership, type TxnDraft,
 } from '../data/live';
 
@@ -42,14 +44,14 @@ interface Store {
   transition: (id: string, to: TxnStatus, note?: string, actorId?: string) => Promise<{ ok: boolean; message: string }>;
   reverseTxn: (id: string) => Promise<{ ok: boolean; message: string }>;
   inventory: InventoryItem[];
-  adjustInventory: (id: string, delta: number, reason?: string) => void;
-  setInventoryQty: (id: string, qty: number, reason?: string) => void;
-  addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
-  updateInventoryItem: (id: string, patch: Partial<Omit<InventoryItem, 'id' | 'quantity'>>) => void;
+  adjustInventory: (id: string, delta: number, reason?: string) => Promise<void>;
+  setInventoryQty: (id: string, qty: number, reason?: string) => Promise<void>;
+  addInventoryItem: (item: Omit<InventoryItem, 'id'>) => Promise<void>;
+  updateInventoryItem: (id: string, patch: Partial<Omit<InventoryItem, 'id' | 'quantity'>>) => Promise<void>;
   pos: PurchaseOrder[];
-  addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>) => void;
-  sendPO: (id: string) => void;
-  cancelPO: (id: string) => void;
+  addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>) => Promise<void>;
+  sendPO: (id: string) => Promise<void>;
+  cancelPO: (id: string) => Promise<void>;
   receivePOLine: (id: string, lineIdx: number, qty: number) => Promise<{ ok: boolean; message: string }>;
   journal: JournalEntry[];
   queueJournal: (id: string) => Promise<{ ok: boolean; message: string }>;
@@ -81,8 +83,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     }))));
   const [liveStaff, setLiveStaff] = useState<LiveMembership | null>(null);
   const [liveError, setLiveError] = useState('');
-  const [inventory, setInventory] = useState<InventoryItem[]>(() => load('inv', seedInventory));
-  const [pos, setPos] = useState<PurchaseOrder[]>(() => load('pos', seedPOs).map(normalizePO));
+  const [inventory, setInventory] = useState<InventoryItem[]>(() => (LIVE_MODE ? [] : load('inv', seedInventory)));
+  const [pos, setPos] = useState<PurchaseOrder[]>(() => (LIVE_MODE ? [] : load('pos', seedPOs).map(normalizePO)));
   const [journal, setJournal] = useState<JournalEntry[]>(() => load('je', seedJournal));
   const [audit, setAudit] = useState<AuditEvent[]>(() => load('audit', seedAudit));
 
@@ -93,8 +95,9 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       // Live transactions are never written to localStorage: demo and live
       // records must not mix invisibly.
       if (!LIVE_MODE) localStorage.setItem(KEY + ':txns', JSON.stringify(txns));
-      localStorage.setItem(KEY + ':inv', JSON.stringify(inventory));
-      localStorage.setItem(KEY + ':pos', JSON.stringify(pos));
+      // Live POs/inventory live server-side only (Slice 4); demo copies stay local.
+      if (!LIVE_MODE) localStorage.setItem(KEY + ':inv', JSON.stringify(inventory));
+      if (!LIVE_MODE) localStorage.setItem(KEY + ':pos', JSON.stringify(pos));
       localStorage.setItem(KEY + ':je', JSON.stringify(journal));
       localStorage.setItem(KEY + ':audit', JSON.stringify(audit));
     } catch { /* private mode */ }
@@ -105,6 +108,18 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
   const refreshLiveTxns = async () => {
     const rows = await listLiveTxns(liveClient());
     setTxns(rows);
+  };
+
+  /** Reload all live operational state (transactions + POs + inventory). */
+  const loadLiveAll = async () => {
+    const [t, p, inv] = await Promise.all([
+      listLiveTxns(liveClient()),
+      listLivePOs(liveClient()),
+      listLiveInventory(liveClient()),
+    ]);
+    setTxns(t);
+    setPos(p);
+    setInventory(inv);
   };
 
   // Live session → linked membership. Runs only in live mode.
@@ -123,7 +138,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         setLiveStaff(m);
         setLiveError('');
-        setTxns(await listLiveTxns(liveClient()));
+        await loadLiveAll();
       } catch (e) {
         if (!cancelled) setLiveError(e instanceof Error ? e.message : 'Live load failed.');
       }
@@ -132,7 +147,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       if (!session) {
         setLiveStaff(null);
+        setLiveError('');
         setTxns([]);
+        setPos([]);
+        setInventory([]);
         return;
       }
       try {
@@ -145,7 +163,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         }
         setLiveStaff(m);
         setLiveError('');
-        setTxns(await listLiveTxns(liveClient()));
+        await loadLiveAll();
       } catch (e) {
         if (!cancelled) setLiveError(e instanceof Error ? e.message : 'Live load failed.');
       }
@@ -223,7 +241,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         const m = await signInLive(ENV.url, ENV.anonKey, email, password);
         setLiveStaff(m);
         setLiveError('');
-        setTxns(await listLiveTxns(liveClient()));
+        await loadLiveAll();
         return { ok: true, message: `Signed in as ${m.name} (${m.role}).` };
       } catch (e) {
         const message = e instanceof Error ? e.message : 'Sign-in failed.';
@@ -234,7 +252,10 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     liveLogout: async () => {
       if (LIVE_MODE && ENV.url && ENV.anonKey) await signOutLive(ENV.url, ENV.anonKey);
       setLiveStaff(null);
+      setLiveError('');
       setTxns([]);
+      setPos([]);
+      setInventory([]);
     },
     refreshLiveTxns: async () => {
       if (!LIVE_MODE) return;
@@ -317,40 +338,95 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       return { ok: true, message: `${id} locked as Reversed. Offsetting entry ${rev.id} queued for accountant review.` };
     },
     inventory,
-    adjustInventory: (id, delta, reason) => {
+    adjustInventory: async (id, delta, reason) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await adjustLiveStock(liveClient(), id, delta, reason?.trim() || 'Manual adjustment');
+        await loadLiveAll();
+        return;
+      }
       setInventory(x => x.map(i => (i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i)));
       const item = inventory.find(i => i.id === id);
       log('Inventory adjusted', item?.item ?? id, `${delta > 0 ? '+' : ''}${delta} (now ${Math.max(0, (item?.quantity ?? 0) + delta)})${reason ? ' — ' + reason : ''} · demo only`);
     },
-    setInventoryQty: (id, qty, reason) => {
+    setInventoryQty: async (id, qty, reason) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        const cur = inventory.find(i => i.id === id);
+        if (!cur) throw new Error('Inventory item not found.');
+        const delta = Math.max(0, qty) - cur.quantity;
+        if (delta === 0) return;
+        await adjustLiveStock(liveClient(), id, delta, reason?.trim() || 'Quantity set via import');
+        await loadLiveAll();
+        return;
+      }
       setInventory(x => x.map(i => (i.id === id ? { ...i, quantity: Math.max(0, qty) } : i)));
       const item = inventory.find(i => i.id === id);
       log('Inventory quantity set', item?.item ?? id, `Set to ${Math.max(0, qty)}${reason ? ' — ' + reason : ''} · demo only`);
     },
-    addInventoryItem: (item) => {
+    addInventoryItem: async (item) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await addLiveItem(liveClient(), {
+          businessUnit: item.businessUnit, type: item.type, item: item.item,
+          category: item.category, quantity: item.quantity, amount: item.amount,
+          supplier: item.supplier, supplierPrice: item.supplierPrice,
+          retailPrice: item.retailPrice, reorderLevel: item.reorderLevel,
+        }, `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        await loadLiveAll();
+        return;
+      }
       const rec = { ...item, createdBy: user?.id, id: 'INV-' + Date.now() };
       setInventory(x => [rec, ...x]);
       log('Inventory item added (demo import)', rec.item, rec.businessUnit + ' · qty ' + rec.quantity);
     },
-    updateInventoryItem: (id, patch) => {
+    updateInventoryItem: async (id, patch) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await updateLiveItem(liveClient(), id, patch as Record<string, unknown>);
+        await loadLiveAll();
+        return;
+      }
       setInventory(x => x.map(i => (i.id === id ? { ...i, ...patch } : i)));
       const item = inventory.find(i => i.id === id);
       log('Inventory item edited', item?.item ?? id, Object.keys(patch).join(', ') + ' · demo only');
     },
     pos,
-    addPO: (po) => {
+    addPO: async (po) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await createLivePO(liveClient(), {
+          poNo: po.poNo, date: po.date, supplier: po.supplier,
+          businessUnit: po.businessUnit, deliveryDate: po.deliveryDate,
+          items: po.items.map(l => ({ item: l.item, quantity: l.quantity, supplierPrice: l.supplierPrice })),
+        }, `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`);
+        await loadLiveAll();
+        return;
+      }
       const items = po.items.map(l => ({ ...l, receivedQty: l.receivedQty ?? 0 }));
       const total = items.reduce((s, i) => s + i.quantity * i.supplierPrice, 0);
       const rec: PurchaseOrder = { ...po, items, createdBy: user?.id, id: 'PO-' + Date.now(), total };
       setPos(x => [rec, ...x]);
       log('Purchase order created', po.poNo, po.supplier + ' — ' + po.businessUnit);
     },
-    sendPO: (id) => {
+    sendPO: async (id) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await sendLivePO(liveClient(), id);
+        await loadLiveAll();
+        return;
+      }
       setPos(x => x.map(p => (p.id === id && p.status === 'Draft' ? { ...p, status: 'Sent to Supplier' as const } : p)));
       const po = pos.find(p => p.id === id);
       if (po) log('P.O. sent to supplier', po.poNo, po.supplier + ' · delivery ' + po.deliveryDate);
     },
-    cancelPO: (id) => {
+    cancelPO: async (id) => {
+      if (LIVE_MODE) {
+        if (!liveStaff) throw new Error('Sign in with a linked staff account first.');
+        await cancelLivePO(liveClient(), id);
+        await loadLiveAll();
+        return;
+      }
       setPos(x => x.map(p => {
         if (p.id !== id) return p;
         if (p.status === 'Received' || p.status === 'Cancelled') return p;
@@ -366,11 +442,34 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       const res = applyReceipt(po, lineIdx, qty, today);
       if ('error' in res) return { ok: false, message: res.error };
       const line = po.items[lineIdx];
+      if (LIVE_MODE) {
+        // Slice 4: the whole receipt (stock + payable) happens atomically
+        // server-side. Demo-created rows carry no database line id and cannot
+        // be receipted live — said explicitly, never silently.
+        if (!liveStaff) return { ok: false, message: 'Sign in with a linked staff account first.' };
+        if (line.lineId == null) {
+          return { ok: false, message: 'This order predates the live backend and has no database lines. Create a new live P.O. to receive against it.' };
+        }
+        try {
+          const r = await recordLiveReceipt(
+            liveClient(), po.id, line.lineId, res.receivedQty,
+            `ui-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
+          );
+          await loadLiveAll();
+          if (r.duplicate) {
+            return { ok: true, message: 'Receipt already recorded — no double count (live).' };
+          }
+          return {
+            ok: true,
+            message: `Received ${res.receivedQty} × ${line.item} — stock updated, payable ${r.payableId ?? ''} queued for accountant review (live).`,
+          };
+        } catch (e) {
+          return { ok: false, message: e instanceof Error ? e.message : 'Live receipt failed.' };
+        }
+      }
       setPos(x => x.map(p => (p.id === id ? res.po : p)));
       // Receiving updates physical stock AND queues a pending payable for
       // accountant review — it never posts to the ledger directly.
-      // Slice 2 scope: the payable goes live; P.O./inventory state stays
-      // demo-local (said explicitly in the result message, never silently).
       const match = inventory.find(i =>
         i.businessUnit === po.businessUnit && i.item.toLowerCase() === line.item.toLowerCase());
       if (match) {
@@ -417,7 +516,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       ...a].slice(0, 200));
       return {
         ok: true,
-        message: `Received ${res.receivedQty} × ${line.item} — stock updated, ${txnId} queued for accountant review${res.fullyReceived ? '; order fully received' : ''}.${LIVE_MODE ? ' (Payable is live; P.O./inventory stay demo-local in Slice 2.)' : ''}`,
+        message: `Received ${res.receivedQty} × ${line.item} — stock updated, ${txnId} queued for accountant review${res.fullyReceived ? '; order fully received' : ''}.`,
       };
     },
     journal,

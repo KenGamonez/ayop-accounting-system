@@ -87,6 +87,8 @@ export interface POLine {
   quantity: number;
   supplierPrice: number;
   receivedQty: number;
+  /** Live database line id (Slice 4); absent on demo rows. */
+  lineId?: number;
 }
 
 export interface PurchaseOrder {

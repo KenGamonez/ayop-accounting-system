@@ -19,7 +19,7 @@ export default function Purchasing() {
 
   const openCount = pos.filter(p => poOutstandingLines(p) > 0 && p.status !== 'Cancelled').length;
 
-  const submit = () => {
+  const submit = async () => {
     const poNo = form.poNo.trim();
     if (!poNo) return setFormErr('P.O. No. is required.');
     if (pos.some(p => p.poNo.toLowerCase() === poNo.toLowerCase())) return setFormErr(`P.O. No. ${poNo} already exists — use a unique number.`);
@@ -32,11 +32,16 @@ export default function Purchasing() {
     const price = toNum(form.supplierPrice);
     if (price === null || price < 0) return setFormErr('Supplier Price cannot be negative.');
     setFormErr('');
-    addPO({
-      poNo, date: form.date, supplier: form.supplier.trim(), businessUnit: form.businessUnit,
-      deliveryDate: form.deliveryDate, items: [{ item: form.item.trim(), quantity: qty, supplierPrice: price, receivedQty: 0 }],
-      received: false, receivedDate: '', status: 'Draft',
-    });
+    try {
+      await addPO({
+        poNo, date: form.date, supplier: form.supplier.trim(), businessUnit: form.businessUnit,
+        deliveryDate: form.deliveryDate, items: [{ item: form.item.trim(), quantity: qty, supplierPrice: price, receivedQty: 0 }],
+        received: false, receivedDate: '', status: 'Draft',
+      });
+    } catch (e) {
+      setFormErr(e instanceof Error ? e.message : 'Could not save the purchase order.');
+      return;
+    }
     setShow(false);
     setFeedback({ ok: true, text: `${poNo} saved as Draft. Send it to the supplier when ready — receipts are recorded per line.` });
   };
@@ -109,9 +114,9 @@ export default function Purchasing() {
               <td className="num"><Money n={p.total} /></td>
               <td><Pill status={p.status} /></td>
               <td><div className="btn-row no-print">
-                {p.status === 'Draft' && <button className="btn small" onClick={() => { sendPO(p.id); setFeedback({ ok: true, text: `${p.poNo} sent to ${p.supplier}. Receipts can now be recorded.` }); }}>Send to supplier</button>}
+                {p.status === 'Draft' && <button className="btn small" onClick={async () => { try { await sendPO(p.id); setFeedback({ ok: true, text: `${p.poNo} sent to ${p.supplier}. Receipts can now be recorded.` }); } catch (e) { setFeedback({ ok: false, text: e instanceof Error ? e.message : 'Send failed.' }); } }}>Send to supplier</button>}
                 {(p.status === 'Draft' || p.status === 'Sent to Supplier' || p.status === 'Partially Received') && (
-                  <button className="btn small danger" onClick={() => { if (confirm(`Cancel ${p.poNo}? Outstanding lines will be voided.`)) { cancelPO(p.id); setFeedback({ ok: true, text: `${p.poNo} cancelled.` }); } }}>Cancel</button>
+                  <button className="btn small danger" onClick={async () => { if (confirm(`Cancel ${p.poNo}? Outstanding lines will be voided.`)) { try { await cancelPO(p.id); setFeedback({ ok: true, text: `${p.poNo} cancelled.` }); } catch (e) { setFeedback({ ok: false, text: e instanceof Error ? e.message : 'Cancel failed.' }); } } }}>Cancel</button>
                 )}
                 {(p.status === 'Received' || p.status === 'Cancelled') && <span className="small muted">Closed</span>}
               </div></td>

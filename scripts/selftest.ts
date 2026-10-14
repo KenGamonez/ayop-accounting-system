@@ -12,6 +12,10 @@ import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, ge
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
 import { DEMO_USERNAME, DEMO_PASSWORD, DEMO_AUTH_KEY, verifyDemoLogin } from '../src/data/demoAccess.ts';
 import { mapDbTxn, mapRpcError, membershipToStaff, toDbPayload, type DbTxnRow } from '../src/data/live.ts';
+import {
+  mapDbPO, mapDbItem, toDbPOPayload, toDbItemPayload,
+  type DbPORow, type DbPOLine, type DbItemRow,
+} from '../src/data/live.ts';
 import { readFileSync } from 'node:fs';
 import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
@@ -640,6 +644,70 @@ check('cancel migration is lifecycle-only (no mapping, no posting, audited)',
   && !/post_journal|set status = 'Posted'|Approve Income|opening_balance/i.test(mig4)
   && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig4.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, ''))
   && mig4.includes('grant execute on function public.cancel_journal_draft(bigint) to authenticated'));
+
+// ---- slice 4: inventory + purchasing backend ----
+const mig5 = readFileSync('supabase/migrations/20261014000005_inventory_purchasing.sql', 'utf8');
+check('slice-4 migration defines ops tables, receipt/move ledgers, RPCs, RLS (no direct writes)',
+  ['public.suppliers', 'public.purchase_orders', 'public.po_lines', 'public.receipts', 'public.inventory_items', 'public.stock_moves']
+    .every(t => mig5.includes(`create table if not exists ${t}`))
+  && ['create_purchase_order', 'send_purchase_order', 'cancel_purchase_order', 'record_receipt', 'add_inventory_item', 'adjust_stock', 'update_inventory_item']
+    .every(f => mig5.includes(`create or replace function public.${f}`))
+  && ['suppliers_read', 'pos_read', 'polines_read', 'receipts_read', 'inv_read', 'moves_read']
+    .every(p => mig5.includes(`"${p}"`))
+  && !/create policy[^;]*for (insert|update|delete)/i.test(mig5)
+  && mig5.includes('grant execute on function public.record_receipt(text, bigint, int, text) to authenticated'));
+check('receipt path caps quantities, blocks repeats, never posts journals',
+  mig5.includes('OVER_RECEIPT') && mig5.includes('NO_REMAINING')
+  && mig5.includes('BAD_STATE: order is already fully received')
+  && mig5.includes('BAD_STATE: send the order')
+  && mig5.includes('BAD_STATE: order is cancelled')
+  && !/insert into public\.journal_entries|insert into public\.journal_lines/i.test(mig5)
+  && mig5.includes("status, remarks)")
+  && mig5.includes("'For Accountant Review'")
+  && mig5.includes('LOCKED_FIELD')
+  && mig5.includes('NEGATIVE_STOCK')
+  && mig5.includes('NO_REASON')
+  && !/service_role|eyJ[A-Za-z0-9_-]{20,}|password\s*[:=]\s*\S+/.test(mig5.replace(/revoke all on function[^;]+;/g, '').replace(/grant execute[^;]+;/g, '')));
+const dbPO = {
+  id: 'PO-2026-0001', po_no: 'PO-1', date: '2026-10-10', supplier: 'MedSupply',
+  business_unit: 'Pharmacy', delivery_date: '2026-10-20', total: '7700',
+  received: false, received_date: null, status: 'Sent to Supplier', created_by: 'jeann',
+} as unknown as DbPORow;
+const dbLines = [
+  { id: 7, po_id: 'PO-2026-0001', item: 'Gloves', quantity: '20', supplier_price: 385, received_qty: '5' },
+  { id: 9, po_id: 'PO-2026-0001', item: 'Masks', quantity: 10, supplier_price: '100', received_qty: 0 },
+  { id: 3, po_id: 'PO-OTHER', item: 'Other', quantity: 1, supplier_price: 1, received_qty: 0 },
+] as unknown as DbPOLine[];
+const mappedPO = mapDbPO(dbPO, dbLines);
+check('db PO maps with line ids, numerics, own lines only',
+  mappedPO.poNo === 'PO-1' && mappedPO.items.length === 2
+  && mappedPO.items[0].lineId === 7 && mappedPO.items[0].quantity === 20
+  && mappedPO.items[0].receivedQty === 5 && mappedPO.total === 7700
+  && mappedPO.createdBy === 'jeann');
+check('po payload whitelists server-accepted fields',
+  JSON.stringify(toDbPOPayload({
+    poNo: 'PO-1', date: '2026-10-10', supplier: 'S', businessUnit: 'Pharmacy',
+    deliveryDate: '2026-10-20', items: [{ item: 'G', quantity: 2, supplierPrice: 5 }],
+  })) === JSON.stringify({
+    po_no: 'PO-1', date: '2026-10-10', supplier: 'S', business_unit: 'Pharmacy',
+    delivery_date: '2026-10-20', items: [{ item: 'G', quantity: 2, supplier_price: 5 }],
+  }));
+const dbItem = {
+  id: 'INV-1', business_unit: 'Pharmacy', type: 'Pharmacy', item: 'Para',
+  category: 'Medical Supplies', quantity: '240', amount: '38400', supplier: 'MedSupply',
+  supplier_price: 160, retail_price: '220', reorder_level: 100, created_by: null,
+} as unknown as DbItemRow;
+const mappedItem = mapDbItem(dbItem);
+check('db inventory item maps with numerics, null creator cleared',
+  mappedItem.quantity === 240 && mappedItem.amount === 38400 && mappedItem.createdBy === undefined);
+check('inventory payload whitelists fields (quantity never smuggled via update path)',
+  JSON.stringify(toDbItemPayload({
+    businessUnit: 'Pharmacy', type: 'Pharmacy', item: 'P', category: 'Medical Supplies',
+    quantity: 5, amount: 800, supplier: 'S', supplierPrice: 160, retailPrice: 220, reorderLevel: 10,
+  })) === JSON.stringify({
+    business_unit: 'Pharmacy', type: 'Pharmacy', item: 'P', category: 'Medical Supplies',
+    quantity: 5, amount: 800, supplier: 'S', supplier_price: 160, retail_price: 220, reorder_level: 10,
+  }));
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
