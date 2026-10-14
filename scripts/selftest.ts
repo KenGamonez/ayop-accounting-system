@@ -8,7 +8,7 @@ ownRecords, canResubmit, guardTransition } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
-import { accountLabel, accountLedger, accountOptions, balanceSheet, getAccount, isDebitNormal } from '../src/data/finance.ts';
+import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
@@ -417,6 +417,28 @@ const bsEmpty = balanceSheet([], { unit: 'All units', from: '2026-11-01', to: '2
 check('empty period yields zeros, never manufactured balances',
   bsEmpty.totalAssets === 0 && bsEmpty.totalLiabilities === 0
   && bsEmpty.totalEquity === 0 && bsEmpty.difference === 0);
+
+// ---- cash flow: explicit cash kinds only ----
+const cfTxns: Txn[] = [
+  mkTxn({ id: 'F1', date: '2026-10-05', status: 'Posted', classification: 'Revenue', kind: 'Cash In' as never, amount: 1000 }),
+  mkTxn({ id: 'F2', date: '2026-10-06', status: 'Posted', classification: 'Expense', kind: 'Cash Out' as never, amount: 250 }),
+  mkTxn({ id: 'F3', date: '2026-10-07', status: 'Posted', classification: 'Expense', kind: 'Disbursement' as never, amount: 5000 }),
+  mkTxn({ id: 'F4', date: '2026-10-08', status: 'Posted', classification: 'Revenue', kind: 'Journal' as never, amount: 7000 }),
+  mkTxn({ id: 'F5', date: '2026-10-09', status: 'For Accountant Review', classification: 'Revenue', kind: 'Cash In' as never, amount: 999 }),
+  mkTxn({ id: 'F6', date: '2026-10-10', status: 'Posted', classification: 'Revenue', kind: 'Cash In' as never, amount: 200, reversalOf: 'F1', item: 'REVERSAL of F1' }),
+];
+const cf = cashFlow(cfTxns, { unit: 'All units', from: '', to: '' });
+check('cash flow counts explicit cash kinds, posted only',
+  cf.inflows.map(t => t.id).join() === 'F1,F6' && cf.outflows.map(t => t.id).join() === 'F2'
+  && cf.totalIn === 800 && cf.totalOut === 250 && cf.net === 550, cf);
+check('disbursement/journal never counted as cash (limitation disclosed)',
+  cf.excluded === 2 && ![...cf.inflows, ...cf.outflows].some(t => t.kind === 'Disbursement' || t.kind === 'Journal'));
+const cfScoped = cashFlow(cfTxns, { unit: 'Pharmacy', from: '2026-10-06', to: '2026-10-10' });
+check('cash flow respects unit + period scope',
+  cfScoped.inflows.map(t => t.id).join() === 'F6' && cfScoped.outflows.map(t => t.id).join() === 'F2' && cfScoped.net === -450, cfScoped);
+const cfEmpty = cashFlow([], { unit: 'All units', from: '', to: '' });
+check('cash flow empty state stays zero',
+  cfEmpty.totalIn === 0 && cfEmpty.totalOut === 0 && cfEmpty.net === 0 && cfEmpty.excluded === 0);
 
 // ---- JeAnn warehouse access + creator attribution ----
 const jeanns = STAFF.filter(s => s.id === 'jeann');

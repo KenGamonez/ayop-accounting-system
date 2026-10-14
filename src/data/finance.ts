@@ -86,6 +86,37 @@ export function incomeSummary(txns: Txn[], s: Scope): IncomeResult {
 }
 
 export interface ConditionGroup { account: string; amount: number }
+export interface CashFlowResult {
+  inflows: Txn[];
+  outflows: Txn[];
+  totalIn: number;
+  totalOut: number;
+  net: number;
+  /** Posted entries deliberately excluded: the demo model records no
+   *  settlement method for Disbursement/Journal kinds, so counting them as
+   *  cash would manufacture figures. */
+  excluded: number;
+}
+
+/**
+ * Cash-basis report on explicit evidence only: posted entries whose
+ * transaction kind is Cash In / Cash Out. Reversals offset via signedAmount.
+ */
+export function cashFlow(txns: Txn[], s: Scope): CashFlowResult {
+  const rows = postedIn(txns, s);
+  const inflows = rows.filter(t => t.kind === 'Cash In');
+  const outflows = rows.filter(t => t.kind === 'Cash Out');
+  const totalIn = inflows.reduce((sum, t) => sum + signedAmount(t), 0);
+  const totalOut = outflows.reduce((sum, t) => sum + signedAmount(t), 0);
+  return {
+    inflows,
+    outflows,
+    totalIn,
+    totalOut,
+    net: totalIn - totalOut,
+    excluded: rows.length - inflows.length - outflows.length,
+  };
+}
 export interface BalanceSheetResult {
   assets: ConditionGroup[];
   liabilities: ConditionGroup[];

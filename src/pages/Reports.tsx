@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso } from '../data/seed';
-import { accountLabel, balanceSheet, conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
+import { accountLabel, balanceSheet, cashFlow, conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Money, Pill } from '../components/ui';
 
@@ -54,6 +54,7 @@ export default function Reports() {
           { to: '/admin/income-expense', t: 'Statement of Income & Expense', d: 'Revenue vs. expenses by business unit (staff terminology).' },
           { to: '/admin/financial-condition', t: 'Statement of Financial Condition', d: 'Assets, liabilities, and equity snapshot (demo).' },
           { to: '/admin/balance-sheet', t: 'Balance Sheet', d: 'Assets, liabilities, equity accounts, and period Net Income.' },
+          { to: '/admin/cash-flow', t: 'Cash Flow', d: 'Cash inflows, outflows, and net flow from explicit cash kinds.' },
           { to: '/admin/close', t: 'Month-End Close', d: 'Checklist: review queues, receipts, Trial Balance, and statement review.' },
           { to: '/admin/journal', t: 'Journal Register', d: 'Posted journal entries with source transactions.' },
           { to: '/admin/accounting', t: 'General Ledger', d: 'Posted ledger lines with account mapping.' },
@@ -62,7 +63,6 @@ export default function Reports() {
           <div className="card" key={r.to}><h3>{r.t}</h3><p className="small muted">{r.d}</p><Link className="btn small ghost" to={r.to}>Open →</Link></div>
         ))}
       </div>
-      <div className="warn"><strong>Scope note:</strong> Cash Flow Statement is conditional on agreed scope and is not claimed as production scope here. BIR compliance is a separate phase — nothing here claims BIR compliance.</div>
     </>
   );
 }
@@ -210,6 +210,45 @@ export function BalanceSheet() {
           </div>
         </>}
         <p className="small muted">Posted entries only — drafts, pending review, rejected, and reversed entries are excluded. Revenue and expenses are never classified as equity accounts; they contribute only through the Net Income line.</p>
+      </div>
+    </>
+  );
+}
+
+export function CashFlow() {
+  const [unit, setUnit] = useState('All units');
+  const [from, setFrom] = useState('2026-10-01');
+  const [to, setTo] = useState('2026-10-31');
+  const { txns } = useStore();
+  const cf = useMemo(() => cashFlow(txns, { unit, from, to }), [txns, unit, from, to]);
+  const empty = cf.inflows.length === 0 && cf.outflows.length === 0;
+  const section = (title: string, total: number, lines: typeof cf.inflows) => (
+    <>
+      <h3 style={{ marginTop: 14 }}>{title} — {peso(total)}</h3>
+      {lines.length === 0
+        ? <p className="small muted">None in this scope — shown as zero, not estimated.</p>
+        : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Particulars</th><th>Unit</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
+          <tbody>{lines.map(t => <tr key={t.id}><td>{t.date}</td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
+            <tr className="total-row"><td colSpan={4}><strong>{title} total</strong></td><td className="num"><strong><Money n={total} /></strong></td></tr></tbody></table></div>}
+    </>
+  );
+  return (
+    <>
+      <PageHead title="Cash Flow" sub={`Cash inflows, outflows, and net flow · ${unit} · ${from} to ${to}. Synthetic demo — validate before production.`} />
+      <FilterBar unit={unit} setUnit={setUnit} from={from} setFrom={setFrom} to={to} setTo={setTo} />
+      <div className="card statement">
+        <PrintHead title="Cash Flow" unit={unit} from={from} to={to} />
+        {empty ? <EmptyState what="no posted cash-kind entries in this period" /> : <>
+          {section('Cash inflows', cf.totalIn, cf.inflows)}
+          {section('Cash outflows', cf.totalOut, cf.outflows)}
+          <h3 style={{ marginTop: 12 }}>Net cash flow (demo): {peso(cf.net)}</h3>
+        </>}
+        <div className="warn" style={{ marginTop: 12 }}>
+          Cash-basis limitation: only posted entries explicitly recorded as Cash In / Cash Out kinds are counted.
+          {' '}{cf.excluded} posted Disbursement/Journal {cf.excluded === 1 ? 'entry is' : 'entries are'} excluded
+          because the demo model records no settlement method for them — counting them as cash would manufacture figures.
+        </div>
+        <p className="small muted">Posted entries only — drafts, pending review, rejected, and reversed entries are excluded. Reversal corrections offset the original.</p>
       </div>
     </>
   );
