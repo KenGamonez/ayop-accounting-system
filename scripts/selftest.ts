@@ -9,6 +9,9 @@ import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts
 import { TRANSACTION_KINDS, COA } from '../src/data/seed.ts';
 import { accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { NAV } from '../src/components/Layout.tsx';
+import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
+import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
+import { seedTransactions } from '../src/data/seed.ts';
 import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
@@ -341,6 +344,29 @@ check('journal blocks unbalanced totals',
   validateJournal({ ...jGood, lines: [{ accountCode: '5100', debit: 500, credit: null }, { accountCode: '1000', debit: null, credit: 400 }] }).totals !== undefined);
 check('approval chain untouched', isAllowed('Approved' as never, 'Posted' as never)
   && !isAllowed('Draft' as never, 'Posted' as never) && countsAsPosted('Posted' as never));
+
+// ---- income & expense ITEM CODE + GL-only screen + sidebar ----
+check('income tables headed ITEM CODE (not Item)',
+  INCOME_REVENUE_COLUMNS.includes('ITEM CODE' as never) && INCOME_EXPENSE_COLUMNS.includes('ITEM CODE' as never)
+  && !INCOME_REVENUE_COLUMNS.includes('Item' as never) && !INCOME_EXPENSE_COLUMNS.includes('Item' as never)
+  && INCOME_REVENUE_COLUMNS.includes('Particulars' as never) && INCOME_EXPENSE_COLUMNS.includes('Particulars' as never));
+const seedInc = incomeSummary(seedTransactions, { unit: 'All units', from: '', to: '' });
+const seedCodes = new Set(COA.map(c => c.code));
+const probeExp = incomeSummary(
+  [mkTxn({ id: 'P1', date: '2026-10-05', status: 'Posted', classification: 'Expense', amount: 75, accountCode: '5100', accountName: 'Office Supplies Expense' })],
+  { unit: 'All units', from: '', to: '' });
+check('every report row maps to a real chart code, totals intact',
+  [...seedInc.revenueLines, ...seedInc.expenseLines].every(t => seedCodes.has(t.accountCode))
+  && seedInc.revenueLines.length > 0
+  && probeExp.expenseLines.every(t => seedCodes.has(t.accountCode))
+  && probeExp.totalExpense === 75 && probeExp.net === -75
+  && seedInc.net === seedInc.totalRevenue - seedInc.totalExpense);
+check('GL opens alone; other tabs keep full row',
+  visibleAccountingTabs('gl').join() === 'gl'
+  && (['coa', 'ap', 'ar', 'bank', 'audit'] as const).every(t => visibleAccountingTabs(t).length === 6));
+const acctLabels = (NAV.find(n => n.label === 'Accounting')?.subs ?? []).map(s => s.label);
+check('sidebar has exactly the six approved destinations',
+  acctLabels.join('|') === 'Trial Balance|Income & Expense|Financial Condition|All Reports (Printable)|Month-End Close|General Ledger', acctLabels);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

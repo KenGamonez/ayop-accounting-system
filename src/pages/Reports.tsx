@@ -98,6 +98,11 @@ export function TrialBalance() {
   );
 }
 
+/** Income & Expense column headings. ITEM CODE values come straight from each
+ *  row's Chart of Accounts account code (t.accountCode) — never inferred. */
+export const INCOME_REVENUE_COLUMNS = ['Date', 'ITEM CODE', 'Particulars', 'Unit', 'Status', 'Amount'] as const;
+export const INCOME_EXPENSE_COLUMNS = ['Date', 'ITEM CODE', 'Particulars', 'Supplier', 'Status', 'Amount'] as const;
+
 export function IncomeExpense() {
   const [unit, setUnit] = useState('All units');
   const [from, setFrom] = useState('2026-10-01');
@@ -113,13 +118,13 @@ export function IncomeExpense() {
         <PrintHead title="Statement of Income & Expense" unit={unit} from={from} to={to} />
         {empty ? <EmptyState what="no posted revenue or expenses in this period" /> : <>
           <h3>Revenue — {peso(inc.totalRevenue)}</h3>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Item</th><th>Unit</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
-            <tbody>{inc.revenueLines.map(t => <tr key={t.id}><td>{t.date}</td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
-              <tr className="total-row"><td colSpan={4}><strong>Total revenue</strong></td><td className="num"><strong><Money n={inc.totalRevenue} /></strong></td></tr></tbody></table></div>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr>{INCOME_REVENUE_COLUMNS.map((c, i) => <th key={c} style={i === 5 ? { textAlign: 'right' } : undefined}>{c}</th>)}</tr></thead>
+            <tbody>{inc.revenueLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{t.accountCode}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.businessUnit}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
+              <tr className="total-row"><td colSpan={5}><strong>Total revenue</strong></td><td className="num"><strong><Money n={inc.totalRevenue} /></strong></td></tr></tbody></table></div>
           <h3 style={{ marginTop: 14 }}>Expenses — {peso(inc.totalExpense)}</h3>
-          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Date</th><th>Item</th><th>Supplier</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th></tr></thead>
-            <tbody>{inc.expenseLines.map(t => <tr key={t.id}><td>{t.date}</td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.supplier}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
-              <tr className="total-row"><td colSpan={4}><strong>Total expenses</strong></td><td className="num"><strong><Money n={inc.totalExpense} /></strong></td></tr></tbody></table></div>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr>{INCOME_EXPENSE_COLUMNS.map((c, i) => <th key={c} style={i === 5 ? { textAlign: 'right' } : undefined}>{c}</th>)}</tr></thead>
+            <tbody>{inc.expenseLines.map(t => <tr key={t.id}><td>{t.date}</td><td><strong>{t.accountCode}</strong></td><td>{t.item}{t.reversalOf ? <div className="small muted">Reversal of {t.reversalOf} (offsets)</div> : ''}</td><td>{t.supplier}</td><td><Pill status={t.status} /></td><td className="num"><Money n={t.reversalOf ? -t.amount : t.amount} /></td></tr>)}
+              <tr className="total-row"><td colSpan={5}><strong>Total expenses</strong></td><td className="num"><strong><Money n={inc.totalExpense} /></strong></td></tr></tbody></table></div>
           <h3 style={{ marginTop: 12 }}>Net {inc.net >= 0 ? 'income' : 'loss'} (demo): {peso(inc.net)}</h3>
         </>}
         <p className="small muted">Posted entries only, same rule as every financial summary. Sample statement for demonstration; formulas and treatments require accounting validation before production use.</p>

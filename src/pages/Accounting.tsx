@@ -19,6 +19,15 @@ const TAB_LABEL: Record<Tab, string> = {
   audit: 'Audit Trail',
 };
 
+/**
+ * Tabs shown on the Accounting screen. The General Ledger opens into its own
+ * screen with no sibling tabs; the other preserved screens keep the full tab
+ * row so their deep links stay navigable.
+ */
+export function visibleAccountingTabs(active: Tab): Tab[] {
+  return active === 'gl' ? ['gl'] : TABS;
+}
+
 export default function Accounting() {
   const { txns } = useStore();
   const [params, setParams] = useSearchParams();
@@ -39,11 +48,13 @@ export default function Accounting() {
     <>
       <PageHead title="Accounting" sub="Chart of Accounts, General Ledger (posted entries only), payables / receivables summaries, bank reconciliation worksheet, and audit-trail preview. Synthetic demo." />
       <div className="notice">Control: only <strong>Posted</strong> transactions appear in the General Ledger and statements. Draft, in-review, and rejected items are excluded.</div>
-      <div className="btn-row no-print" style={{ marginBottom: 12 }}>
-        {TABS.map(t => (
-          <button key={t} className={'btn small ' + (tab === t ? '' : 'ghost')} onClick={() => pick(t)}>{TAB_LABEL[t]}</button>
-        ))}
-      </div>
+      {tab !== 'gl' && (
+        <div className="btn-row no-print" style={{ marginBottom: 12 }}>
+          {visibleAccountingTabs(tab).map(t => (
+            <button key={t} className={'btn small ' + (tab === t ? '' : 'ghost')} onClick={() => pick(t)}>{TAB_LABEL[t]}</button>
+          ))}
+        </div>
+      )}
       {tab === 'coa' && (
         <div className="card"><h3>Chart of Accounts (demo structure — validate codes before production)</h3>
           <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Code</th><th>Account name</th><th>Type</th></tr></thead>
