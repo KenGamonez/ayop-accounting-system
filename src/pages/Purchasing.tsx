@@ -1,5 +1,8 @@
 import React, { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS } from '../data/seed';
+import { toCSV, fileName } from '../data/io';
+import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -36,6 +39,13 @@ export default function Purchasing() {
         </div>
       )}
       <div className="card">
+        <div className="filters no-print">
+          <button className="btn ghost small" onClick={() => download(new Blob([toCSV(
+            ['P.O. No.', 'Date', 'Supplier', 'Business Unit', 'Delivery Date', 'Item', 'Quantity', 'Supplier Price', 'Line Total', 'Status'],
+            pos.flatMap(p => p.items.map(it => [p.poNo, p.date, p.supplier, p.businessUnit, p.deliveryDate, it.item, it.quantity, it.supplierPrice, it.quantity * it.supplierPrice, p.status] as (string | number)[]))
+          )], { type: 'text/csv' }), fileName('purchase-orders', 'csv'))}>Export CSV</button>
+          <Link className="btn ghost small" to="/admin/import-export">Import →</Link>
+        </div>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>P.O. No.</th><th>Supplier / Unit</th><th>Delivery Date</th><th>Items</th><th style={{ textAlign: 'right' }}>Total</th><th>Status</th><th></th></tr></thead>
           <tbody>{pos.map(p => (

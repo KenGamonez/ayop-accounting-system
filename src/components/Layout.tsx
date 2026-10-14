@@ -35,6 +35,7 @@ const NAV: Item[] = [
   { to: '/admin/inventory', label: 'Inventory' },
   { to: '/admin/purchasing', label: 'Purchasing (P.O.)' },
   { to: '/admin/business-units', label: 'Business Units' },
+  { to: '/admin/import-export', label: 'Import & Export' },
   { to: '/admin/settings', label: 'Settings' },
 ];
 

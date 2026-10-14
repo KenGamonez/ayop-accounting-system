@@ -14,6 +14,7 @@ import Approval from './pages/Approval';
 import Inventory from './pages/Inventory';
 import Purchasing from './pages/Purchasing';
 import { BusinessUnits, Settings } from './pages/Ops';
+import ImportExport from './pages/ImportExport';
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { user } = useStore();
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="inventory" element={<Inventory />} />
             <Route path="purchasing" element={<Purchasing />} />
             <Route path="business-units" element={<BusinessUnits />} />
+            <Route path="import-export" element={<ImportExport />} />
             <Route path="settings" element={<Settings />} />
           </Route>
           <Route path="*" element={<Navigate to="/admin" replace />} />

@@ -1,6 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, INVENTORY_TYPES, ITEM_CATEGORIES, peso } from '../data/seed';
+import { toCSV, fileName } from '../data/io';
+import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -31,6 +33,11 @@ export default function Inventory() {
           <select value={unit} onChange={e => setUnit(e.target.value)}><option>All</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
           <select value={type} onChange={e => setType(e.target.value)}><option>All</option>{INVENTORY_TYPES.map(t => <option key={t}>{t}</option>)}</select>
           <input placeholder="Search Item" value={q} onChange={e => setQ(e.target.value)} />
+          <button className="btn ghost small" onClick={() => download(new Blob([toCSV(
+            ['Business Unit', 'Type', 'Item', 'Category', 'Quantity', 'Supplier', 'Supplier Price', 'Retail Price', 'Amount'],
+            rows.map(i => [i.businessUnit, i.type, i.item, i.category, i.quantity, i.supplier, i.supplierPrice, i.retailPrice, i.amount])
+          )], { type: 'text/csv' }), fileName('inventory', 'csv'))}>Export CSV ({rows.length})</button>
+          <Link className="btn ghost small" to="/admin/import-export">Import →</Link>
         </div>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>Business Unit</th><th>Type</th><th>Item</th><th>Supplier</th><th style={{ textAlign: 'right' }}>Qty</th><th style={{ textAlign: 'right' }}>Supplier Price</th><th style={{ textAlign: 'right' }}>Retail Price</th><th style={{ textAlign: 'right' }}>Amount</th><th>Adjust</th></tr></thead>

@@ -1,5 +1,8 @@
 import React, { useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, CLASSIFICATIONS, COA, ITEM_CATEGORIES } from '../data/seed';
+import { toCSV, fileName } from '../data/io';
+import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money, WorkflowSteps } from '../components/ui';
 
@@ -62,6 +65,11 @@ export default function Transactions() {
           <select value={fClass} onChange={e => setFClass(e.target.value)}><option>All</option>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fStatus} onChange={e => setFStatus(e.target.value)}><option>All</option>{['Draft', 'For Accountant Review', 'Accountant Reviewed', 'For Owner Approval', 'Approved', 'Posted', 'Rejected', 'Reversed'].map(s => <option key={s}>{s}</option>)}</select>
           <input placeholder="Search Item / Supplier / ID" value={q} onChange={e => setQ(e.target.value)} style={{ minWidth: 220 }} />
+          <button className="btn ghost small" onClick={() => download(new Blob([toCSV(
+            ['ID', 'Date', 'Business Unit', 'Classification', 'Kind', 'Item', 'Category', 'Supplier', 'Supplier Price', 'Retail Price', 'Quantity', 'Amount', 'Status'],
+            filtered.map(t => [t.id, t.date, t.businessUnit, t.classification, t.kind, t.item, t.category, t.supplier, t.supplierPrice, t.retailPrice, t.quantity, t.amount, t.status])
+          )], { type: 'text/csv' }), fileName('transactions', 'csv'))}>Export CSV ({filtered.length})</button>
+          <Link className="btn ghost small" to="/admin/import-export">Import →</Link>
         </div>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>ID / Date</th><th>Item / Supplier</th><th>Unit</th><th>Class</th><th>Status</th><th style={{ textAlign: 'right' }}>Amount</th><th>Next step</th></tr></thead>

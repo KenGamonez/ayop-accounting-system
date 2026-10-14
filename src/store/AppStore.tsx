@@ -11,11 +11,14 @@ interface Store {
   reverseTxn: (id: string) => void;
   inventory: InventoryItem[];
   adjustInventory: (id: string, delta: number) => void;
+  setInventoryQty: (id: string, qty: number) => void;
+  addInventoryItem: (item: Omit<InventoryItem, 'id'>) => void;
   pos: PurchaseOrder[];
   addPO: (po: Omit<PurchaseOrder, 'id' | 'total'>) => void;
   receivePO: (id: string) => void;
   journal: JournalEntry[];
   postJournal: (id: string) => void;
+  addJournal: (j: Omit<JournalEntry, 'id'>) => void;
   audit: AuditEvent[];
   log: (action: string, ref: string, detail: string) => void;
   resetDemo: () => void;
@@ -97,6 +100,12 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     },
     inventory,
     adjustInventory: (id, delta) => setInventory(x => x.map(i => (i.id === id ? { ...i, quantity: Math.max(0, i.quantity + delta) } : i))),
+    setInventoryQty: (id, qty) => setInventory(x => x.map(i => (i.id === id ? { ...i, quantity: Math.max(0, qty) } : i))),
+    addInventoryItem: (item) => {
+      const rec = { ...item, id: 'INV-' + Date.now() };
+      setInventory(x => [rec, ...x]);
+      log('Inventory item added (demo import)', rec.item, rec.businessUnit + ' · qty ' + rec.quantity);
+    },
     pos,
     addPO: (po) => {
       const total = po.items.reduce((s, i) => s + i.quantity * i.supplierPrice, 0);
@@ -113,6 +122,11 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     postJournal: (id) => {
       setJournal(x => x.map(j => (j.id === id ? { ...j, status: 'Posted' as const } : j)));
       log('Journal posted', id, 'Entry posted to General Ledger (demo).');
+    },
+    addJournal: (j) => {
+      const rec = { ...j, id: 'JE-' + Date.now() };
+      setJournal(x => [rec, ...x]);
+      log('Journal draft created (demo import)', rec.ref, rec.particulars);
     },
     audit,
     log,
