@@ -381,6 +381,9 @@ check('ITEM CODE label resolves code + COA description from project data',
 const fullAcctSubs = (NAV.find(n => n.label === 'Accounting')?.subs ?? []).map(s => s.label);
 check('accounting sidebar shows the six destinations in exact order',
   fullAcctSubs.join('|') === 'Trial Balance|Income & Expense|Financial Condition|All Reports (Printable)|Month-End Close|General Ledger', fullAcctSubs);
+check('accounting parent is dropdown-only; transaction parent behavior intact',
+  NAV.find(n => n.label === 'Accounting')?.dropdownOnly === true
+  && !NAV.find(n => n.label === 'Transaction')?.dropdownOnly);
 check('warehouse sees no accounting sidebar group at all',
   !navFor('Warehouse', NAV).some(n => n.label === 'Accounting')
   && !canVisit('Warehouse', '/admin/balance-sheet')

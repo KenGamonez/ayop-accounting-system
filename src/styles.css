@@ -46,6 +46,14 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; gap: 10px;
   color: #dbe3f5; padding: 8px 10px; border-radius: 7px; font-size: 13.5px;
 }
+.nav button.nav-parent-btn {
+  display: flex; align-items: center; gap: 10px; flex: 1;
+  background: transparent; border: none; cursor: pointer; font: inherit;
+  color: #dbe3f5; padding: 8px 10px; border-radius: 7px; font-size: 13.5px;
+  text-align: left;
+}
+.nav button.nav-parent-btn:hover { background: rgba(255,255,255,.08); }
+.nav-parent.active-parent > button.nav-parent-btn { background: rgba(255,255,255,.08); }
 .nav a:hover { background: rgba(255,255,255,.08); text-decoration: none; }
 .nav a.active { background: #fff; color: var(--navy); font-weight: 600; }
 .nav .dot { width: 7px; height: 7px; border-radius: 50%; background: #7f8db1; flex-shrink: 0; }

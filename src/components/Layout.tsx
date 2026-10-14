@@ -4,7 +4,7 @@ import { useStore } from '../store/AppStore';
 import { canVisit, navFor } from '../data/access';
 
 export interface Sub { to: string; label: string }
-export interface Item { to: string; label: string; end?: boolean; subs?: Sub[] }
+export interface Item { to: string; label: string; end?: boolean; subs?: Sub[]; dropdownOnly?: boolean }
 
 export const NAV: Item[] = [
   { to: '/admin', label: 'Overview', end: true },
@@ -17,7 +17,7 @@ export const NAV: Item[] = [
     ],
   },
   {
-    to: '/admin/accounting', label: 'Accounting', subs: [
+    to: '/admin/accounting', label: 'Accounting', dropdownOnly: true, subs: [
       { to: '/admin/trial-balance', label: 'Trial Balance' },
       { to: '/admin/income-expense', label: 'Income & Expense' },
       { to: '/admin/financial-condition', label: 'Financial Condition' },
@@ -51,9 +51,15 @@ function Row({ item, path, onNav }: { item: Item; path: string; onNav: () => voi
   return (
     <>
       <div className={'nav-parent' + (active ? ' active-parent' : '')}>
-        <NavLink to={item.to} onClick={() => { setOpen(o => !o); onNav(); }} className={active && !open ? 'active' : ''} style={{ flex: 1 }}>
-          <span className="dot" />{item.label}
-        </NavLink>
+        {item.dropdownOnly ? (
+          <button className="nav-parent-btn" aria-expanded={open} onClick={() => setOpen(o => !o)}>
+            <span className="dot" />{item.label}
+          </button>
+        ) : (
+          <NavLink to={item.to} onClick={() => { setOpen(o => !o); onNav(); }} className={active && !open ? 'active' : ''} style={{ flex: 1 }}>
+            <span className="dot" />{item.label}
+          </NavLink>
+        )}
         <button className="nav-toggle" aria-label={(open ? 'Collapse ' : 'Expand ') + item.label} onClick={() => setOpen(o => !o)}>
           {open ? '▾' : '▸'}
         </button>
