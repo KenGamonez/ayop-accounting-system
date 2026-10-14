@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso } from '../data/seed';
-import { accountLabel, conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
+import { accountLabel, balanceSheet, conditionSummary, incomeSummary, postedIn, trialBalance } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Money, Pill } from '../components/ui';
 
@@ -53,6 +53,7 @@ export default function Reports() {
           { to: '/admin/trial-balance', t: 'Trial Balance', d: 'Debit / credit balance check across ledger accounts.' },
           { to: '/admin/income-expense', t: 'Statement of Income & Expense', d: 'Revenue vs. expenses by business unit (staff terminology).' },
           { to: '/admin/financial-condition', t: 'Statement of Financial Condition', d: 'Assets, liabilities, and equity snapshot (demo).' },
+          { to: '/admin/balance-sheet', t: 'Balance Sheet', d: 'Assets, liabilities, equity accounts, and period Net Income.' },
           { to: '/admin/close', t: 'Month-End Close', d: 'Checklist: review queues, receipts, Trial Balance, and statement review.' },
           { to: '/admin/journal', t: 'Journal Register', d: 'Posted journal entries with source transactions.' },
           { to: '/admin/accounting', t: 'General Ledger', d: 'Posted ledger lines with account mapping.' },
@@ -162,6 +163,53 @@ export function FinancialCondition() {
           </div>
         </>}
         <p className="small muted">Posted entries only, grouped by the application's Chart of Accounts codes. Illustrative — incomplete account mapping limits this result.</p>
+      </div>
+    </>
+  );
+}
+
+export function BalanceSheet() {
+  const [unit, setUnit] = useState('All units');
+  const [from, setFrom] = useState('2026-10-01');
+  const [to, setTo] = useState('2026-10-31');
+  const { txns } = useStore();
+  const b = useMemo(() => balanceSheet(txns, { unit, from, to }), [txns, unit, from, to]);
+  const empty = b.assets.length === 0 && b.liabilities.length === 0 && b.equityAccounts.length === 0;
+  const section = (title: string, total: number, groups: { account: string; amount: number }[], none: string) => (
+    <>
+      <h3 style={{ marginTop: 14 }}>{title} — {peso(total)}</h3>
+      {groups.length === 0
+        ? <p className="small muted">{none}</p>
+        : <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Account code — name</th><th style={{ textAlign: 'right' }}>Balance</th></tr></thead>
+          <tbody>{groups.map(g => <tr key={g.account}><td>{g.account}</td><td className="num"><Money n={g.amount} /></td></tr>)}
+            <tr className="total-row"><td><strong>{title} total</strong></td><td className="num"><strong><Money n={total} /></strong></td></tr></tbody></table></div>}
+    </>
+  );
+  return (
+    <>
+      <PageHead title="Balance Sheet" sub={`Assets, liabilities, and equity · ${unit} · ${from} to ${to}. Synthetic demo — validate before production.`} />
+      <FilterBar unit={unit} setUnit={setUnit} from={from} setFrom={setFrom} to={to} setTo={setTo} />
+      <div className="card statement">
+        <PrintHead title="Balance Sheet" unit={unit} from={from} to={to} />
+        {empty && b.netIncome === 0 ? <EmptyState what="no posted balance-sheet entries in this period" /> : <>
+          {section('Assets', b.totalAssets, b.assets, 'No posted asset balances in this scope — shown as zero, not estimated.')}
+          {section('Liabilities', b.totalLiabilities, b.liabilities, 'No posted liability balances in this scope — shown as zero, not estimated.')}
+          <h3 style={{ marginTop: 14 }}>Equity — {peso(b.totalEquity)}</h3>
+          <div className="tbl-wrap"><table className="tbl"><thead><tr><th>Account / line</th><th style={{ textAlign: 'right' }}>Balance</th></tr></thead>
+            <tbody>
+              {b.equityAccounts.length === 0
+                ? <tr><td>Equity accounts<span className="small muted" style={{ display: 'block' }}>No posted balances on Equity-type chart codes — zero, not manufactured.</span></td><td className="num"><Money n={0} /></td></tr>
+                : b.equityAccounts.map(g => <tr key={g.account}><td>{g.account}</td><td className="num"><Money n={g.amount} /></td></tr>)}
+              <tr><td><strong>Net Income (period)</strong><span className="small muted" style={{ display: 'block' }}>Revenue less expenses for this period — distinct from equity-account balances above.</span></td><td className="num"><strong><Money n={b.netIncome} /></strong></td></tr>
+              <tr className="total-row"><td><strong>Total equity</strong></td><td className="num"><strong><Money n={b.totalEquity} /></strong></td></tr>
+            </tbody></table></div>
+          <div className={Math.abs(b.difference) < 0.005 ? 'notice' : 'warn'} style={{ marginTop: 12 }}>
+            Total Assets {peso(b.totalAssets)} · Total Liabilities + Equity {peso(b.totalLiabilitiesAndEquity)} ·
+            Difference <strong>{peso(b.difference)}</strong>.
+            {Math.abs(b.difference) >= 0.005 && ' Not concealed: demo postings are single-sided, so a difference is expected until proper double-entry rules land in the backend phase.'}
+          </div>
+        </>}
+        <p className="small muted">Posted entries only — drafts, pending review, rejected, and reversed entries are excluded. Revenue and expenses are never classified as equity accounts; they contribute only through the Net Income line.</p>
       </div>
     </>
   );

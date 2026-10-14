@@ -85,7 +85,58 @@ export function incomeSummary(txns: Txn[], s: Scope): IncomeResult {
   return { revenueLines, expenseLines, totalRevenue, totalExpense, net: totalRevenue - totalExpense };
 }
 
-export interface ConditionGroup { account: string; amount: number }export interface ConditionResult {
+export interface ConditionGroup { account: string; amount: number }
+export interface BalanceSheetResult {
+  assets: ConditionGroup[];
+  liabilities: ConditionGroup[];
+  /** Balances on Equity-type Chart of Accounts codes only — revenue and
+   *  expenses are never classified here; they flow into Net Income below. */
+  equityAccounts: ConditionGroup[];
+  totalAssets: number;
+  totalLiabilities: number;
+  totalEquityAccounts: number;
+  /** Period revenue less expenses, from the same posted-only income logic. */
+  netIncome: number;
+  totalEquity: number;
+  totalLiabilitiesAndEquity: number;
+  difference: number;
+}
+
+export function balanceSheet(txns: Txn[], s: Scope): BalanceSheetResult {
+  // Entries posted to an Equity-type chart code belong to Equity even if
+  // their classification field disagrees — the COA code is authoritative, so
+  // these rows are excluded from the asset/liability groups, never doubled.
+  const isEquityCoded = (t: Txn) => COA.find(a => a.code === t.accountCode)?.type === 'Equity';
+  const cond = conditionSummary(txns.filter(t => !isEquityCoded(t)), s);
+  const inc = incomeSummary(txns, s);
+  const eq = new Map<string, number>();
+  postedIn(txns, s).forEach(t => {
+    const acct = COA.find(a => a.code === t.accountCode);
+    if (acct && acct.type === 'Equity') {
+      const k = `${t.accountCode} — ${t.accountName}`;
+      eq.set(k, (eq.get(k) ?? 0) + signedAmount(t));
+    }
+  });
+  const equityAccounts = [...eq.entries()]
+    .map(([account, amount]) => ({ account, amount }))
+    .sort((a, b) => a.account.localeCompare(b.account));
+  const totalEquityAccounts = equityAccounts.reduce((sum, g) => sum + g.amount, 0);
+  const netIncome = inc.net;
+  const totalEquity = totalEquityAccounts + netIncome;
+  const totalLiabilitiesAndEquity = cond.totalLiabilities + totalEquity;
+  return {
+    assets: cond.assets,
+    liabilities: cond.liabilities,
+    equityAccounts,
+    totalAssets: cond.totalAssets,
+    totalLiabilities: cond.totalLiabilities,
+    totalEquityAccounts,
+    netIncome,
+    totalEquity,
+    totalLiabilitiesAndEquity,
+    difference: cond.totalAssets - totalLiabilitiesAndEquity,
+  };
+}export interface ConditionResult {
   assets: ConditionGroup[];
   liabilities: ConditionGroup[];
   totalAssets: number;

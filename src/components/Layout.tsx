@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavLink, Navigate, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/AppStore';
 import { canVisit, navFor } from '../data/access';
@@ -37,6 +37,10 @@ export const NAV: Item[] = [
 function Row({ item, path, onNav }: { item: Item; path: string; onNav: () => void }) {
   const [open, setOpen] = useState(() => item.subs?.some(s => path === s.to || path.startsWith(s.to.split('?')[0] + '/')) ?? false);
   const active = item.end ? path === item.to : path === item.to || path.startsWith(item.to + '/') || (item.subs?.some(s => path === s.to.split('?')[0]) ?? false);
+  // Auto-expand when navigation lands on one of this group's destinations,
+  // including deep links — but never fight a manual collapse on the same page.
+  const onDestination = item.subs?.some(s => path === s.to.split('?')[0]) ?? false;
+  useEffect(() => { if (onDestination) setOpen(true); }, [path]); // eslint-disable-line react-hooks/exhaustive-deps
   if (!item.subs) {
     return (
       <NavLink to={item.to} end={item.end} onClick={onNav} className={active ? 'active' : ''}>
@@ -47,7 +51,7 @@ function Row({ item, path, onNav }: { item: Item; path: string; onNav: () => voi
   return (
     <>
       <div className={'nav-parent' + (active ? ' active-parent' : '')}>
-        <NavLink to={item.to} onClick={onNav} className={active && !open ? 'active' : ''} style={{ flex: 1 }}>
+        <NavLink to={item.to} onClick={() => { setOpen(o => !o); onNav(); }} className={active && !open ? 'active' : ''} style={{ flex: 1 }}>
           <span className="dot" />{item.label}
         </NavLink>
         <button className="nav-toggle" aria-label={(open ? 'Collapse ' : 'Expand ') + item.label} onClick={() => setOpen(o => !o)}>

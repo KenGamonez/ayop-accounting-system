@@ -10,7 +10,7 @@ import TransactionTypes from './pages/TransactionTypes';
 import { CashIn, CashOut } from './pages/CashPages';
 import Disbursement from './pages/Disbursement';
 import Journal from './pages/Journal';
-import Reports, { TrialBalance, IncomeExpense, FinancialCondition } from './pages/Reports';
+import Reports, { TrialBalance, IncomeExpense, FinancialCondition, BalanceSheet } from './pages/Reports';
 import Approval from './pages/Approval';
 import Inventory from './pages/Inventory';
 import Purchasing from './pages/Purchasing';
@@ -44,6 +44,7 @@ export default function App() {
             <Route path="trial-balance" element={<TrialBalance />} />
             <Route path="income-expense" element={<IncomeExpense />} />
             <Route path="financial-condition" element={<FinancialCondition />} />
+            <Route path="balance-sheet" element={<BalanceSheet />} />
             <Route path="close" element={<CloseChecklist />} />
             <Route path="approval" element={<Approval />} />
             <Route path="inventory" element={<Inventory />} />

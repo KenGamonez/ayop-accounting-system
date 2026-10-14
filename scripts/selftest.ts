@@ -8,7 +8,7 @@ ownRecords, canResubmit, guardTransition } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
-import { accountLabel, accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
+import { accountLabel, accountLedger, accountOptions, balanceSheet, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
@@ -376,6 +376,44 @@ check('ITEM CODE label resolves code + COA description from project data',
   && seedInc.revenueLines.every(t => accountLabel(t.accountCode, t.accountName).startsWith(t.accountCode + ' — '))
   && accountLabel('9999', 'Legacy Account') === '9999 — Legacy Account'
   && accountLabel('9999') === '9999');
+
+// ---- accounting sidebar order + balance sheet ----
+const fullAcctSubs = (NAV.find(n => n.label === 'Accounting')?.subs ?? []).map(s => s.label);
+check('accounting sidebar shows the six destinations in exact order',
+  fullAcctSubs.join('|') === 'Trial Balance|Income & Expense|Financial Condition|All Reports (Printable)|Month-End Close|General Ledger', fullAcctSubs);
+check('warehouse sees no accounting sidebar group at all',
+  !navFor('Warehouse', NAV).some(n => n.label === 'Accounting')
+  && !canVisit('Warehouse', '/admin/balance-sheet')
+  && canVisit('Accounting', '/admin/balance-sheet')
+  && canVisit('CEO', '/admin/balance-sheet'));
+const bsTxns: Txn[] = [
+  mkTxn({ id: 'B1', date: '2026-10-05', status: 'Posted', classification: 'Asset', amount: 5000, accountCode: '1000', accountName: 'Cash on Hand' }),
+  mkTxn({ id: 'B2', date: '2026-10-06', status: 'Posted', classification: 'Liability', amount: 2000, accountCode: '2000', accountName: 'Accounts Payable' }),
+  mkTxn({ id: 'B3', date: '2026-10-07', status: 'Posted', classification: 'Revenue', amount: 900, accountCode: '4100', accountName: 'Pharmacy Sales' }),
+  mkTxn({ id: 'B4', date: '2026-10-08', status: 'Posted', classification: 'Expense', amount: 300, accountCode: '5000', accountName: 'Medical Supplies Expense' }),
+  mkTxn({ id: 'B5', date: '2026-10-09', status: 'For Accountant Review', classification: 'Asset', amount: 9999, accountCode: '1000', accountName: 'Cash on Hand' }),
+  mkTxn({ id: 'B6', date: '2026-10-10', status: 'Posted', classification: 'Asset', amount: 1500, accountCode: '3000', accountName: "Owner's Equity" }),
+];
+const bs = balanceSheet(bsTxns, { unit: 'All units', from: '', to: '' });
+check('balance sheet classifies accounts, pending excluded',
+  bs.assets.map(g => g.account).join() === '1000 — Cash on Hand'
+  && bs.liabilities.map(g => g.account).join() === '2000 — Accounts Payable'
+  && bs.totalAssets === 5000 && bs.totalLiabilities === 2000, bs);
+check('net income = revenue less expenses, distinct from equity accounts',
+  bs.netIncome === 600
+  && bs.equityAccounts.map(g => g.account).join() === `3000 — Owner's Equity`
+  && bs.totalEquityAccounts === 1500 && bs.totalEquity === 2100
+  && !bs.equityAccounts.some(g => /4100|5000/.test(g.account)), bs.equityAccounts);
+check('balance sheet totals + honest difference',
+  bs.totalLiabilitiesAndEquity === 4100 && bs.difference === 900, bs);
+const bsScoped = balanceSheet(bsTxns, { unit: 'Dialysis Center', from: '', to: '' });
+check('balance sheet respects unit scope + zero states',
+  bsScoped.totalAssets === 0 && bsScoped.assets.length === 0
+  && bsScoped.netIncome === 0 && bsScoped.difference === 0, bsScoped);
+const bsEmpty = balanceSheet([], { unit: 'All units', from: '2026-11-01', to: '2026-11-30' });
+check('empty period yields zeros, never manufactured balances',
+  bsEmpty.totalAssets === 0 && bsEmpty.totalLiabilities === 0
+  && bsEmpty.totalEquity === 0 && bsEmpty.difference === 0);
 
 // ---- JeAnn warehouse access + creator attribution ----
 const jeanns = STAFF.filter(s => s.id === 'jeann');
