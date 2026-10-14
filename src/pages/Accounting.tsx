@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { COA, Txn } from '../data/seed';
 import { countsAsPosted } from '../data/ops';
+import { signedAmount } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -30,12 +31,15 @@ export default function Accounting() {
   const pick = (t: Tab) => { setTab(t); setParams({ tab: t }, { replace: true }); };
 
   const posted = useMemo(() => txns.filter(t => countsAsPosted(t.status)), [txns]);
-  const gl = useMemo(() => posted.map(t => ({
-    date: t.date, ref: t.id, particulars: `${t.item} — ${t.businessUnit}`,
-    debit: t.classification === 'Expense' || t.classification === 'Asset' ? t.amount : 0,
-    credit: t.classification === 'Revenue' || t.classification === 'Liability' ? t.amount : 0,
-    account: `${t.accountCode} — ${t.accountName}`,
-  })), [posted]);
+  const gl = useMemo(() => posted.map(t => {
+    const amt = signedAmount(t);
+    return {
+      date: t.date, ref: t.id, particulars: `${t.item} — ${t.businessUnit}${t.reversalOf ? ` (reversal of ${t.reversalOf})` : ''}`,
+      debit: t.classification === 'Expense' || t.classification === 'Asset' ? amt : 0,
+      credit: t.classification === 'Revenue' || t.classification === 'Liability' ? amt : 0,
+      account: `${t.accountCode} — ${t.accountName}`,
+    };
+  }), [posted]);
   const ap = txns.filter(t => t.accountCode === '2000' && t.status !== 'Reversed');
   const ar = txns.filter(t => t.accountCode === '1200' && t.status !== 'Reversed');
 

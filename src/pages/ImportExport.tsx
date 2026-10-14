@@ -5,6 +5,7 @@ import {
   DATA_TYPES, DataType, autoMap, validateRows, dupKey, toCSV, fileName,
   sheetsToCsvUrl, ValidatedRow,
 } from '../data/io';
+import { sumByClass, trialBalance } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill } from '../components/ui';
 import { download } from '../components/download';
@@ -539,15 +540,8 @@ function ExportCenter() {
   const poObjs = () => store.pos.flatMap(p => p.items.map(it => ({ 'P.O. No.': p.poNo, Date: p.date, Supplier: p.supplier, 'Business Unit': p.businessUnit, 'Delivery Date': p.deliveryDate, Item: it.item, Quantity: it.quantity, 'Supplier Price': it.supplierPrice, 'Line Total': it.quantity * it.supplierPrice, Status: p.status })));
 
   const tb = useMemo(() => {
-    const m = new Map<string, { debit: number; credit: number }>();
-    store.txns.filter(t => t.status === 'Posted' && (unit === 'All units' || t.businessUnit === unit) && inRange(t.date)).forEach(t => {
-      const k = `${t.accountCode} — ${t.accountName}`;
-      const e = m.get(k) ?? { debit: 0, credit: 0 };
-      if (t.classification === 'Expense' || t.classification === 'Asset') e.debit += t.amount; else e.credit += t.amount;
-      m.set(k, e);
-    });
-    return [...m.entries()].map(([Account, v]) => ({ Account, Debit: v.debit, Credit: v.credit }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    const r = trialBalance(store.txns, { unit, from, to });
+    return r.lines.map(l => ({ Account: l.account, Debit: l.debit, Credit: l.credit }));
   }, [store.txns, unit, from, to]);
 
   const cards: { title: string; desc: string; count: string; csv: () => void; xlsx: () => void }[] = [
@@ -557,7 +551,7 @@ function ExportCenter() {
     { title: 'Suppliers', desc: 'Supplier directory (demo).', count: `${loadSuppliers([]).length} rows`, csv: () => { const s = loadSuppliers([]); csvOut(fileName('suppliers', 'csv'), ['Supplier', 'Contact Person', 'Phone', 'Address', 'Terms'], s.map(x => [x.supplier, x.contact, x.phone, x.address, x.terms])); }, xlsx: () => xlsxOut(fileName('suppliers', 'xlsx'), 'Suppliers', loadSuppliers([])) },
     { title: 'Trial Balance', desc: 'Posted balances for the selected unit and dates.', count: `${tb.length} accounts`, csv: () => csvOut(fileName('trial-balance', 'csv', unit), ['Account', 'Debit', 'Credit'], tb.map(r => [r.Account, r.Debit, r.Credit])), xlsx: () => xlsxOut(fileName('trial-balance', 'xlsx', unit), 'TrialBalance', tb) },
     { title: 'Chart of Accounts', desc: 'Reference account structure (demo).', count: `${COA.length} accounts`, csv: () => csvOut(fileName('chart-of-accounts', 'csv'), ['Code', 'Name', 'Type'], COA.map(a => [a.code, a.name, a.type])), xlsx: () => xlsxOut(fileName('chart-of-accounts', 'xlsx'), 'ChartOfAccounts', COA) },
-    { title: 'Business Units', desc: 'Reference list with posted demo performance.', count: '9 units', csv: () => csvOut(fileName('business-units', 'csv'), ['Business Unit', 'Posted Revenue', 'Posted Expenses'], BUSINESS_UNITS.map(u => { const p = store.txns.filter(t => t.status === 'Posted' && t.businessUnit === u); return [u, p.filter(t => t.classification === 'Revenue').reduce((s, t) => s + t.amount, 0), p.filter(t => t.classification === 'Expense').reduce((s, t) => s + t.amount, 0)]; })), xlsx: () => xlsxOut(fileName('business-units', 'xlsx'), 'BusinessUnits', BUSINESS_UNITS.map(u => ({ 'Business Unit': u }))) },
+    { title: 'Business Units', desc: 'Reference list with posted demo performance.', count: '9 units', csv: () => csvOut(fileName('business-units', 'csv'), ['Business Unit', 'Posted Revenue', 'Posted Expenses'], BUSINESS_UNITS.map(u => [u, sumByClass(store.txns, { unit: u, from, to }, 'Revenue'), sumByClass(store.txns, { unit: u, from, to }, 'Expense')])), xlsx: () => xlsxOut(fileName('business-units', 'xlsx'), 'BusinessUnits', BUSINESS_UNITS.map(u => ({ 'Business Unit': u }))) },
     { title: 'Journal Entries', desc: 'Draft and posted journal lines.', count: `${store.journal.length} rows`, csv: () => csvOut(fileName('journal', 'csv'), ['Date', 'Ref', 'Particulars', 'Business Unit', 'Debit Account', 'Credit Account', 'Amount', 'Status'], store.journal.map(j => [j.date, j.ref, j.particulars, j.businessUnit, j.debitAccount, j.creditAccount, j.amount, j.status])), xlsx: () => xlsxOut(fileName('journal', 'xlsx'), 'Journal', store.journal.map(j => ({ Date: j.date, Ref: j.ref, Particulars: j.particulars, 'Business Unit': j.businessUnit, 'Debit Account': j.debitAccount, 'Credit Account': j.creditAccount, Amount: j.amount, Status: j.status }))) },
   ];
 

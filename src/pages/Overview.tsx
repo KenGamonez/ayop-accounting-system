@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, peso } from '../data/seed';
+import { sumByClass } from '../data/finance';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
@@ -8,10 +9,10 @@ export default function Overview() {
   const { txns, inventory, pos, audit, user } = useStore();
   const [unit, setUnit] = useState('All units');
 
-  const posted = useMemo(() => txns.filter(t => t.status === 'Posted' && (unit === 'All units' || t.businessUnit === unit)), [txns, unit]);
   const pending = txns.filter(t => !['Posted', 'Reversed'].includes(t.status));
-  const revenue = posted.filter(t => t.classification === 'Revenue').reduce((s, t) => s + t.amount, 0);
-  const expense = posted.filter(t => t.classification === 'Expense').reduce((s, t) => s + t.amount, 0);
+  const scope = useMemo(() => ({ unit, from: '', to: '' }), [unit]);
+  const revenue = sumByClass(txns, scope, 'Revenue');
+  const expense = sumByClass(txns, scope, 'Expense');
   const low = inventory.filter(i => i.quantity <= i.reorderLevel);
   const role = user?.role ?? '';
   const isWarehouse = ['Warehouse', 'Diagnostics Cashier', 'Pharmacy'].includes(role);

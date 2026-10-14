@@ -118,6 +118,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         id: nextTxnId(txns.map(x => x.id)),
         item: `REVERSAL of ${id} — ${cur.item}`,
         status: 'For Accountant Review',
+        reversalOf: id,
         remarks: `Correcting reversal of posted entry ${id}. Original preserved; this reversal needs review before posting.`,
       };
       setTxns(x => [rev, ...x.map(t => (t.id === id ? { ...t, status: 'Reversed' as const } : t))]);

@@ -56,6 +56,8 @@ export interface Txn {
   enteredBy: string;
   status: TxnStatus;
   remarks: string;
+  /** Set on offsetting correction entries — finance counts them negative. */
+  reversalOf?: string;
 }
 
 export interface InventoryItem {

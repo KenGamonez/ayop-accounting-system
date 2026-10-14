@@ -2,6 +2,8 @@
 import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed, nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS } from '../src/data/ops.ts';
+import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
+import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
 let pass = 0, fail = 0;
@@ -126,6 +128,58 @@ check('next role named per queue step', nextRoleFor('For Accountant Review' as n
 check('txn ids collision-free', nextTxnId(['TXN-2026-0041', 'TXN-2026-0050']) === 'TXN-2026-0051'
   && nextTxnId([]) === 'TXN-2026-0041'
   && nextTxnId(['TXN-2026-0099', 'TXN-2026-0100']) === 'TXN-2026-0101');
+
+// ---- shared finance: posted-only, reversals, statements ----
+const mkTxn = (over: Partial<Txn>): Txn => ({
+  id: 'TXN-2026-0001', date: '2026-10-14', businessUnit: 'Pharmacy',
+  classification: 'Revenue', kind: 'Cash In', item: 'Sales', category: 'Medical Supplies',
+  supplier: 'Walk-in', supplierPrice: 0, retailPrice: 100, quantity: 1, amount: 100,
+  accountCode: '4100', accountName: 'Pharmacy Sales', enteredBy: 'Demo',
+  status: 'Posted', remarks: '', ...over,
+});
+const finSet: Txn[] = [
+  mkTxn({ id: 'TXN-2026-0001', classification: 'Revenue', amount: 1000 }),
+  mkTxn({ id: 'TXN-2026-0002', classification: 'Expense', amount: 400, accountCode: '5000', accountName: 'Medical Supplies Expense', supplier: 'MedSupply' }),
+  mkTxn({ id: 'TXN-2026-0003', classification: 'Revenue', amount: 500, status: 'For Accountant Review' }),
+  mkTxn({ id: 'TXN-2026-0004', classification: 'Expense', amount: 999, status: 'Rejected' }),
+  mkTxn({ id: 'TXN-2026-0005', classification: 'Asset', amount: 250, accountCode: '1100', accountName: 'Pharmacy Inventory', status: 'Draft' }),
+  mkTxn({ id: 'TXN-2026-0006', classification: 'Revenue', amount: 1000, status: 'Reversed' }),
+  mkTxn({ id: 'TXN-2026-0007', classification: 'Revenue', amount: 1000, status: 'Posted', reversalOf: 'TXN-2026-0006', item: 'REVERSAL of TXN-2026-0006' }),
+  mkTxn({ id: 'TXN-2026-0008', classification: 'Expense', amount: 50, businessUnit: 'Dialysis Center' }),
+];
+const ALL = { unit: 'All units', from: '', to: '' };
+check('postedIn excludes draft/pending/rejected/reversed, includes posted reversal',
+  postedIn(finSet, ALL).map(t => t.id).sort().join(',') === 'TXN-2026-0001,TXN-2026-0002,TXN-2026-0007,TXN-2026-0008');
+check('scope filters unit + dates',
+  postedIn(finSet, { unit: 'Pharmacy', from: '', to: '' }).length === 3
+  && postedIn(finSet, { unit: 'All units', from: '2026-10-15', to: '' }).length === 0);
+check('reversal counts negative (no double count)',
+  signedAmount(finSet[6]) === -1000 && signedAmount(finSet[0]) === 1000
+  && sumByClass(finSet, ALL, 'Revenue') === 0);
+check('KPI sums posted-only', sumByClass(finSet, ALL, 'Expense') === 450
+  && sumByClass(finSet, { unit: 'Dialysis Center', from: '', to: '' }, 'Expense') === 50);
+const tb = trialBalance(finSet, ALL);
+check('trial balance totals + honest difference',
+  tb.totalDebit === 450 && tb.totalCredit === 0 && tb.difference === 450 && !tb.balanced, tb);
+const tbBal: Txn[] = [
+  mkTxn({ id: 'A', classification: 'Expense', amount: 300 }),
+  mkTxn({ id: 'B', classification: 'Revenue', amount: 300 }),
+];
+const tb2 = trialBalance(tbBal, ALL);
+check('balanced trial balance detected', tb2.balanced && tb2.difference === 0 && tb2.totalDebit === 300 && tb2.totalCredit === 300, tb2);
+const inc = incomeSummary(finSet, ALL);
+check('income: revenue/expense/net', inc.totalRevenue === 0 && inc.totalExpense === 450 && inc.net === -450
+  && inc.revenueLines.length === 2 && inc.expenseLines.length === 2, inc);
+const cond = conditionSummary(finSet, ALL);
+check('condition groups by account, no manufactured equity',
+  cond.totalAssets === 0 && cond.totalLiabilities === 0 && cond.difference === 0
+  && cond.periodRevenue === 0 && cond.periodExpense === 450, cond);
+const cond2 = conditionSummary([
+  mkTxn({ id: 'X', classification: 'Asset', amount: 5000, accountCode: '1000', accountName: 'Cash on Hand' }),
+  mkTxn({ id: 'Y', classification: 'Liability', amount: 2000, accountCode: '2000', accountName: 'Accounts Payable' }),
+], ALL);
+check('condition totals + difference', cond2.totalAssets === 5000 && cond2.totalLiabilities === 2000
+  && cond2.difference === 3000 && cond2.assets[0].account === '1000 — Cash on Hand', cond2);
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);
