@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, CLASSIFICATIONS, COA, ITEM_CATEGORIES, TRANSACTION_KINDS } from '../data/seed';
+import { canResubmit } from '../data/ops';
 import { toCSV, fileName } from '../data/io';
 import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
@@ -12,6 +13,7 @@ export default function Transactions() {
   const [fClass, setFClass] = useState('All');
   const [fStatus, setFStatus] = useState('All');
   const [q, setQ] = useState('');
+  const [mineOnly, setMineOnly] = useState(false);
   const [show, setShow] = useState(false);
   const [form, setForm] = useState({ date: '2026-10-14', businessUnit: 'Diagnostic Center', classification: 'Expense' as string, kind: 'Disbursement' as string, item: '', category: 'Medical Supplies', supplier: '', supplierPrice: 0, retailPrice: 0, quantity: 1, amount: 0, accountCode: '5000', accountName: 'Medical Supplies Expense', remarks: '' });
 
@@ -19,8 +21,9 @@ export default function Transactions() {
     (fUnit === 'All' || t.businessUnit === fUnit) &&
     (fClass === 'All' || t.classification === fClass) &&
     (fStatus === 'All' || t.status === fStatus) &&
+    (!mineOnly || !user || t.createdBy === user.id) &&
     (!q || (t.item + t.supplier + t.id).toLowerCase().includes(q.toLowerCase()))
-  ), [txns, fUnit, fClass, fStatus, q]);
+  ), [txns, fUnit, fClass, fStatus, q, mineOnly, user]);
 
   const submit = () => {
     if (!form.item.trim() || !form.supplier.trim()) { alert('Item and Supplier are required (staff terminology).'); return; }
@@ -65,6 +68,7 @@ export default function Transactions() {
           <select value={fClass} onChange={e => setFClass(e.target.value)}><option>All</option>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select>
           <select value={fStatus} onChange={e => setFStatus(e.target.value)}><option>All</option>{['Draft', 'For Accountant Review', 'Accountant Reviewed', 'For Owner Approval', 'Approved', 'Posted', 'Rejected', 'Reversed'].map(s => <option key={s}>{s}</option>)}</select>
           <input placeholder="Search Item / Supplier / ID" value={q} onChange={e => setQ(e.target.value)} style={{ minWidth: 220 }} />
+          <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> Mine only</label>
           <button className="btn ghost small" onClick={() => download(new Blob([toCSV(
             ['ID', 'Date', 'Business Unit', 'Classification', 'Kind', 'Item', 'Category', 'Supplier', 'Supplier Price', 'Retail Price', 'Quantity', 'Amount', 'Status'],
             filtered.map(t => [t.id, t.date, t.businessUnit, t.classification, t.kind, t.item, t.category, t.supplier, t.supplierPrice, t.retailPrice, t.quantity, t.amount, t.status])
@@ -80,7 +84,7 @@ export default function Transactions() {
               <td>{t.businessUnit}</td><td>{t.classification}</td>
               <td><Pill status={t.status} /></td>
               <td className="num"><Money n={t.amount} /></td>
-              <td>{t.status === 'Draft' || t.status === 'Rejected' ? <button className="btn small ghost" onClick={() => transition(t.id, 'For Accountant Review')}>Resubmit</button> : <span className="small muted">In queue</span>}</td>
+              <td>{t.status === 'Draft' || t.status === 'Rejected' ? (canResubmit(user?.role ?? '', user?.id, t) ? <button className="btn small ghost" onClick={() => transition(t.id, 'For Accountant Review', undefined, user?.id)}>Resubmit</button> : <span className="small muted">Originator resubmits</span>) : <span className="small muted">In queue</span>}</td>
             </tr>
           ))}</tbody>
         </table></div>

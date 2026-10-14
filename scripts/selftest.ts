@@ -3,10 +3,11 @@ import * as XLSX from 'xlsx';
 import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, sheetsToCsvUrl } from '../src/data/io.ts';
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed,
 nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS, validateDisbursement, inDateRange,
-dateRangeError, journalTotals, validateJournal } from '../src/data/ops.ts';
+dateRangeError, journalTotals, validateJournal, staffIdForName, canActOnApprovals, isCreator,
+ownRecords, canResubmit, guardTransition } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
-import { TRANSACTION_KINDS, COA } from '../src/data/seed.ts';
+import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
@@ -374,6 +375,40 @@ check('ITEM CODE label resolves code + COA description from project data',
   && seedInc.revenueLines.every(t => accountLabel(t.accountCode, t.accountName).startsWith(t.accountCode + ' — '))
   && accountLabel('9999', 'Legacy Account') === '9999 — Legacy Account'
   && accountLabel('9999') === '9999');
+
+// ---- JeAnn warehouse access + creator attribution ----
+const jeanns = STAFF.filter(s => s.id === 'jeann');
+check('JeAnn identity reused (no duplicate employee)',
+  jeanns.length === 1 && jeanns[0].name === 'Jeann' && jeanns[0].role === 'Warehouse'
+  && jeanns[0].unit === 'Central Warehouse' && STAFF.length === 7, jeanns);
+check('name-to-ID resolution', staffIdForName('Jeann') === 'jeann'
+  && staffIdForName('Daniflor Calago') === 'dani' && staffIdForName('Nobody') === null);
+check('seed warehouse records carry JeAnn’s user ID',
+  seedTransactions.filter(t => t.createdBy === 'jeann').map(t => t.id).sort().join(',') === 'TXN-2026-0043,TXN-2026-0044');
+check('approval actions limited to Accounting + CEO (demo presentation)',
+  canActOnApprovals('Accounting') && canActOnApprovals('CEO')
+  && !canActOnApprovals('Warehouse') && !canActOnApprovals('HR')
+  && !canActOnApprovals('Diagnostics Cashier') && !canActOnApprovals('Pharmacy') && !canActOnApprovals('IT'));
+check('own-records filter uses stored user ID',
+  ownRecords(seedTransactions, 'jeann').length === 2
+  && ownRecords(seedTransactions, 'jeann').every(t => t.createdBy === 'jeann')
+  && ownRecords(seedTransactions, null).length === 0
+  && ownRecords(seedTransactions, 'dani').length === 2);
+check('creator may resubmit, others may not (approvers may handle any)',
+  canResubmit('Warehouse', 'jeann', { createdBy: 'jeann' })
+  && !canResubmit('Warehouse', 'jeann', { createdBy: 'dani' })
+  && canResubmit('Accounting', 'dani', { createdBy: 'jeann' })
+  && canResubmit('CEO', 'joy', {}));
+const ownTxn = { id: 'TXN-X', createdBy: 'jeann' };
+check('creator cannot self-approve or self-post',
+  (['Accountant Reviewed', 'For Owner Approval', 'Approved', 'Posted'] as const).every(to => guardTransition(ownTxn, to, 'jeann') !== null)
+  && guardTransition(ownTxn, 'For Accountant Review', 'jeann') === null
+  && guardTransition(ownTxn, 'Rejected', 'dani') === null
+  && guardTransition(ownTxn, 'Approved', 'dani') === null
+  && guardTransition(ownTxn, 'Posted', 'joy') === null
+  && guardTransition({ id: 'TXN-Y' }, 'Approved', 'jeann') === null);
+check('selectable types still Disbursement + Journal only',
+  TRANSACTION_KINDS.join() === 'Disbursement,Journal');
 
 console.log(`\n${pass} passed, ${fail} failed`);
 process.exit(fail ? 1 : 0);

@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
 import { AuditEvent, COA, InventoryItem, JournalEntry, PurchaseOrder, Staff, STAFF, Txn, TxnStatus, seedAudit, seedInventory, seedJournal, seedPOs, seedTransactions } from '../data/seed';
-import { applyReceipt, defaultInventoryTypeFor, isAllowed, nextTxnId } from '../data/ops';
+import { applyReceipt, defaultInventoryTypeFor, guardTransition, isAllowed, nextTxnId, staffIdForName } from '../data/ops';
 
 // Older demo state saved P.O. lines without receivedQty — backfill so the
 // receipt workflow degrades gracefully instead of crashing or double-counting.
@@ -17,7 +17,7 @@ interface Store {
   logout: () => void;
   txns: Txn[];
   addTxn: (t: Omit<Txn, 'id' | 'status'>) => Txn;
-  transition: (id: string, to: TxnStatus, note?: string) => { ok: boolean; message: string };
+  transition: (id: string, to: TxnStatus, note?: string, actorId?: string) => { ok: boolean; message: string };
   reverseTxn: (id: string) => { ok: boolean; message: string };
   inventory: InventoryItem[];
   adjustInventory: (id: string, delta: number, reason?: string) => void;
@@ -50,7 +50,10 @@ function load<T>(k: string, fb: T): T {
 
 export function StoreProvider({ children }: { children: React.ReactNode }) {
   const [userId, setUserId] = useState<string | null>(() => load('user', null as string | null));
-  const [txns, setTxns] = useState<Txn[]>(() => load('txns', seedTransactions));
+  const [txns, setTxns] = useState<Txn[]>(() => load('txns', seedTransactions).map(t => ({
+    ...t,
+    createdBy: t.createdBy ?? staffIdForName(t.enteredBy) ?? undefined,
+  })));
   const [inventory, setInventory] = useState<InventoryItem[]>(() => load('inv', seedInventory));
   const [pos, setPos] = useState<PurchaseOrder[]>(() => load('pos', seedPOs).map(normalizePO));
   const [journal, setJournal] = useState<JournalEntry[]>(() => load('je', seedJournal));
@@ -82,15 +85,17 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     logout: () => setUserId(null),
     txns,
     addTxn: (t) => {
-      const txn: Txn = { ...t, id: nextTxnId(txns.map(x => x.id)), status: 'For Accountant Review' };
+      const txn: Txn = { ...t, createdBy: user?.id, id: nextTxnId(txns.map(x => x.id)), status: 'For Accountant Review' };
       setTxns(x => [txn, ...x]);
       const actor = STAFF.find(s => s.name === t.enteredBy)?.name ?? t.enteredBy;
       setAudit(a => [{ id: 'A-' + Date.now(), at: new Date().toLocaleString(), actor, action: 'Created transaction', ref: txn.id, detail: t.item }, ...a]);
       return txn;
     },
-    transition: (id, to, note) => {
+    transition: (id, to, note, actorId) => {
       const cur = txns.find(t => t.id === id);
       if (!cur) return { ok: false, message: `Transaction ${id} not found — no change made.` };
+      const blocked = guardTransition(cur, to, actorId);
+      if (blocked) return { ok: false, message: blocked };
       if (cur.status === to) return { ok: false, message: `${id} is already ${to} — repeated action ignored.` };
       if (!isAllowed(cur.status, to))
         return { ok: false, message: `Cannot move ${id} from ${cur.status} to ${to}. Follow the Entry → Review → Approval → Posting order.` };
@@ -119,6 +124,8 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         item: `REVERSAL of ${id} — ${cur.item}`,
         status: 'For Accountant Review',
         reversalOf: id,
+        createdBy: user?.id,
+        enteredBy: user?.name ?? 'Demo user',
         remarks: `Correcting reversal of posted entry ${id}. Original preserved; this reversal needs review before posting.`,
       };
       setTxns(x => [rev, ...x.map(t => (t.id === id ? { ...t, status: 'Reversed' as const } : t))]);
@@ -140,7 +147,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
       log('Inventory quantity set', item?.item ?? id, `Set to ${Math.max(0, qty)}${reason ? ' — ' + reason : ''} · demo only`);
     },
     addInventoryItem: (item) => {
-      const rec = { ...item, id: 'INV-' + Date.now() };
+      const rec = { ...item, createdBy: user?.id, id: 'INV-' + Date.now() };
       setInventory(x => [rec, ...x]);
       log('Inventory item added (demo import)', rec.item, rec.businessUnit + ' · qty ' + rec.quantity);
     },
@@ -153,7 +160,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
     addPO: (po) => {
       const items = po.items.map(l => ({ ...l, receivedQty: l.receivedQty ?? 0 }));
       const total = items.reduce((s, i) => s + i.quantity * i.supplierPrice, 0);
-      const rec: PurchaseOrder = { ...po, items, id: 'PO-' + Date.now(), total };
+      const rec: PurchaseOrder = { ...po, items, createdBy: user?.id, id: 'PO-' + Date.now(), total };
       setPos(x => [rec, ...x]);
       log('Purchase order created', po.poNo, po.supplier + ' — ' + po.businessUnit);
     },
@@ -195,6 +202,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
           category: 'Medical Supplies', quantity: res.receivedQty,
           amount: res.receivedValue, supplier: po.supplier,
           supplierPrice: line.supplierPrice, retailPrice: 0, reorderLevel: 10,
+          createdBy: user?.id,
         };
         setInventory(x => [rec, ...x]);
       }
@@ -205,7 +213,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         category: 'Medical Supplies', supplier: po.supplier,
         supplierPrice: line.supplierPrice, retailPrice: 0, quantity: res.receivedQty,
         amount: res.receivedValue, accountCode: '2000', accountName: 'Accounts Payable',
-        enteredBy: user?.name ?? 'Demo user', status: 'For Accountant Review',
+        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review',
         remarks: `Auto-queued from P.O. receipt ${po.poNo} — awaiting accountant review, not posted`,
       };
       setTxns(x => [txn, ...x]);
@@ -234,7 +242,7 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         item: j.particulars, category: 'Medical Supplies', supplier: '—',
         supplierPrice: 0, retailPrice: 0, quantity: 1, amount: j.amount,
         accountCode: code || '5000', accountName: acct?.name ?? j.debitAccount,
-        enteredBy: user?.name ?? 'Demo user', status: 'For Accountant Review',
+        enteredBy: user?.name ?? 'Demo user', createdBy: user?.id, status: 'For Accountant Review',
         remarks: `Queued from journal draft ${j.ref} — needs accountant review, not posted`,
       };
       setTxns(x => [txn, ...x]);

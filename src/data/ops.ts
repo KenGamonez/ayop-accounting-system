@@ -3,7 +3,7 @@
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
 import type { PurchaseOrder, TxnStatus } from './seed';
-import { BUSINESS_UNITS, COA } from './seed';
+import { BUSINESS_UNITS, COA, STAFF } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
 
@@ -126,6 +126,55 @@ export function nextTxnId(existing: string[]): string {
     if (m) max = Math.max(max, parseInt(m[1], 10));
   });
   return 'TXN-2026-' + String(max + 1).padStart(4, '0');
+}
+
+// ---------- staff identity, creator attribution, demo permissions ----------
+
+/** Resolve a display name to a staff user ID (one-time migration help only). */
+export function staffIdForName(name: string): string | null {
+  return STAFF.find(s => s.name === (name ?? '').trim())?.id ?? null;
+}
+
+/** Roles whose demo workspace includes approval/posting actions. */
+export const APPROVER_ROLES = ['Accounting', 'CEO'];
+
+/**
+ * Demo-only permission helper. This reflects UI presentation, NOT
+ * server-enforced authorization — there is no backend in this phase.
+ */
+export function canActOnApprovals(role: string): boolean {
+  return APPROVER_ROLES.includes(role);
+}
+
+export function isCreator(userId: string | null | undefined, rec: { createdBy?: string }): boolean {
+  return !!userId && rec.createdBy === userId;
+}
+
+export function ownRecords<T extends { createdBy?: string }>(rows: T[], userId: string | null | undefined): T[] {
+  if (!userId) return [];
+  return rows.filter(r => r.createdBy === userId);
+}
+
+/** Originators may correct/resubmit their own rejected work; approvers may handle any. */
+export function canResubmit(role: string, userId: string | null | undefined, txn: { createdBy?: string }): boolean {
+  return canActOnApprovals(role) || isCreator(userId, txn);
+}
+
+const SELF_APPROVAL_BLOCKED: TxnStatus[] = ['Accountant Reviewed', 'For Owner Approval', 'Approved', 'Posted'];
+
+/**
+ * Block a creator from approving/posting their own entry. Returns an error
+ * message, or null when the actor may proceed (store still enforces order).
+ */
+export function guardTransition(
+  txn: { createdBy?: string; id: string },
+  to: TxnStatus,
+  actorId: string | null | undefined,
+): string | null {
+  if (actorId && txn.createdBy && txn.createdBy === actorId && SELF_APPROVAL_BLOCKED.includes(to)) {
+    return `You created ${txn.id} — approval and posting need a different reviewer (demo control). It stays in the queue.`;
+  }
+  return null;
 }
 
 // ---------- disbursement entry + date-range search ----------

@@ -8,12 +8,14 @@ import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
 
 export default function Purchasing() {
-  const { pos, addPO, sendPO, cancelPO, receivePOLine } = useStore();
+  const { pos, addPO, sendPO, cancelPO, receivePOLine, user } = useStore();
   const [form, setForm] = useState({ poNo: 'PO-2026-0190', date: '2026-10-14', supplier: '', businessUnit: 'Central Warehouse', deliveryDate: '2026-10-20', item: '', quantity: '10', supplierPrice: '0' });
   const [show, setShow] = useState(false);
   const [formErr, setFormErr] = useState('');
   const [qtyByLine, setQtyByLine] = useState<Record<string, string>>({});
   const [feedback, setFeedback] = useState<{ ok: boolean; text: string } | null>(null);
+  const [mineOnly, setMineOnly] = useState(false);
+  const shownPOs = mineOnly && user ? pos.filter(p => p.createdBy === user.id) : pos;
 
   const openCount = pos.filter(p => poOutstandingLines(p) > 0 && p.status !== 'Cancelled').length;
 
@@ -80,10 +82,11 @@ export default function Purchasing() {
             pos.flatMap(p => p.items.map(it => [p.poNo, p.date, p.supplier, p.businessUnit, p.deliveryDate, it.item, it.quantity, it.receivedQty ?? 0, Math.max(0, it.quantity - (it.receivedQty ?? 0)), it.supplierPrice, p.status] as (string | number)[]))
           )], { type: 'text/csv' }), fileName('purchase-orders', 'csv'))}>Export CSV</button>
           <Link className="btn ghost small" to="/admin/import-export">Import →</Link>
+          <label className="small" style={{ display: 'flex', gap: 6, alignItems: 'center' }}><input type="checkbox" checked={mineOnly} onChange={e => setMineOnly(e.target.checked)} /> Mine only</label>
         </div>
         <div className="tbl-wrap"><table className="tbl">
           <thead><tr><th>P.O. No.</th><th>Supplier / Unit</th><th>Delivery Date</th><th>Lines (ordered / received)</th><th style={{ textAlign: 'right' }}>Total</th><th>Status</th><th>Actions</th></tr></thead>
-          <tbody>{pos.map(p => (
+          <tbody>{shownPOs.map(p => (
             <tr key={p.id}>
               <td><strong>{p.poNo}</strong><div className="small muted">{p.date}</div></td>
               <td>{p.supplier}<div className="small muted">{p.businessUnit}</div></td>
