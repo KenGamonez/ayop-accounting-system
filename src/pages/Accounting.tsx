@@ -122,10 +122,33 @@ function presetRange(preset: GLPreset, year: number, sub: number, customFrom: st
   return sub === 1 ? { from: `${year}-01-01`, to: `${year}-06-30` } : { from: `${year}-07-01`, to: `${year}-12-31` };
 }
 
+/**
+ * UI-only nested options under 1010 Cash in Bank (supplied names only).
+ * These are NOT Chart of Accounts records: no COA row, balance, mapping,
+ * or ledger data is created. Selecting one reuses the existing
+ * account-selection path and lands on an explicit unconfigured state.
+ */
+const CASH_IN_BANK_CHILDREN = [
+  { code: '1010-1', name: 'LBP - SPPDC' },
+  { code: '1010-2', name: 'LBP - JEM PHARMACY' },
+  { code: '1010-3', name: 'CIB - PSB' },
+  { code: '1010-4', name: 'CIB - SB' },
+  { code: '1010-5', name: 'CIB - RCBC' },
+  { code: '1010-6', name: 'CIB - LBP SPPDC' },
+  { code: '1010-7', name: 'CIB - LBP JEM PHARMACY' },
+];
+
+/** UI-only helper: is this code one of the supplied (unmapped) children? */
+export function isUiCashChild(code: string): boolean {
+  return CASH_IN_BANK_CHILDREN.some(c => c.code === (code ?? '').trim());
+}
+
 function GeneralLedger() {
   const { txns } = useStore();
   const options = useMemo(() => accountOptions(), []);
   const [input, setInput] = useState('');
+  const [open, setOpen] = useState(false);
+  const [expanded1010, setExpanded1010] = useState(false);
   const [unit, setUnit] = useState('All units');
   const [preset, setPreset] = useState<GLPreset>('Monthly');
   const [year, setYear] = useState(2026);
@@ -136,8 +159,11 @@ function GeneralLedger() {
   const range = presetRange(preset, year, sub, customFrom, customTo);
   const rangeBad = !!range.from && !!range.to && range.from > range.to;
 
+  // Existing selection/filtering behavior unchanged: code is the text
+  // before the em dash, resolved against the real Chart of Accounts.
   const code = (input.split('—')[0] ?? '').trim();
   const account = code ? getAccount(code) : null;
+  const uiChild = CASH_IN_BANK_CHILDREN.find(c => c.code === code) ?? null;
   const ledger = useMemo(
     () => (account && !rangeBad ? accountLedger(txns, account.code, { unit, from: range.from, to: range.to }) : null),
     [txns, account, unit, range.from, range.to, rangeBad],
@@ -145,16 +171,59 @@ function GeneralLedger() {
 
   const subLabel = preset === 'Monthly' ? 'Month' : preset === 'Quarterly' ? 'Quarter' : preset === 'Six months' ? 'Half' : null;
 
+  // Searchable filter across real COA codes/names plus the UI-only children.
+  const q = input.trim().toLowerCase();
+  const matches = (c: string, n: string) => !q || c.toLowerCase().includes(q) || n.toLowerCase().includes(q) || `${c} — ${n}`.toLowerCase().includes(q);
+  const filtered = options.filter(o => matches(o.code, o.name));
+  const filteredChildren = CASH_IN_BANK_CHILDREN.filter(c => matches(c.code, c.name));
+  const parent1010 = options.find(o => o.code === '1010');
+  const showChildren = expanded1010 || (q.length > 0 && filteredChildren.length > 0);
+  const pick = (c: string, n: string) => { setInput(`${c} — ${n}`); setOpen(false); };
+
   return (
     <div className="card statement">
       <h3>General Ledger — account first, then period</h3>
       <div className="form-grid no-print">
-        <label className="f">Account Code (searchable, from Chart of Accounts)
-          <input list="gl-accounts" value={input} onChange={e => setInput(e.target.value)} placeholder="e.g. 1000 — Cash on Hand" />
-          <datalist id="gl-accounts">
-            {options.map(o => <option key={o.code} value={`${o.code} — ${o.name}`} />)}
-          </datalist>
-        </label>
+        <div className="f gl-select-wrap">Account — search code or name
+          <div className="gl-searchrow">
+            <input value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
+            {input && <button type="button" className="btn ghost small" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">Clear</button>}
+            <button type="button" className="btn ghost small" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={open ? 'Collapse account list' : 'Expand account list'}>{open ? '▾' : '▸'}</button>
+          </div>
+          {open && (
+            <div className="gl-list" id="gl-account-list" role="listbox" aria-label="Chart of Accounts">
+              {filtered.length === 0 && filteredChildren.length === 0 && <div className="gl-empty">No accounts match “{input.trim()}”.</div>}
+              {filtered.filter(o => o.code !== '1010').map(o => (
+                <button key={o.code} type="button" role="option" aria-selected={code === o.code} className={'gl-opt' + (code === o.code ? ' selected' : '')} onClick={() => pick(o.code, o.name)}>
+                  <span className="gl-code">{o.code}</span><span className="gl-name">{o.name}</span><span className="gl-type">{o.type}</span>
+                </button>
+              ))}
+              {parent1010 && matches(parent1010.code, parent1010.name) && (
+                <div className="gl-parent-block">
+                  <div className={'gl-opt gl-parent' + (code === '1010' ? ' selected' : '')}>
+                    <button type="button" className="gl-expand" onClick={() => setExpanded1010(v => !v)} aria-expanded={showChildren} aria-label={(showChildren ? 'Collapse' : 'Expand') + ' 1010 Cash in Bank subaccounts'}>
+                      {showChildren ? '▾' : '▸'}
+                    </button>
+                    <button type="button" role="option" aria-selected={code === '1010'} className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)}>
+                      <span className="gl-code">{parent1010.code}</span><span className="gl-name"><strong>{parent1010.name}</strong> <span className="gl-badge">Parent</span></span><span className="gl-type">{parent1010.type}</span>
+                    </button>
+                  </div>
+                  {showChildren && (
+                    <div className="gl-children">
+                      {filteredChildren.length === 0 && <div className="gl-empty">No subaccounts match “{input.trim()}”.</div>}
+                      {filteredChildren.map(c => (
+                        <button key={c.code} type="button" role="option" aria-selected={code === c.code} className={'gl-opt gl-child' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title="UI-only option — no Chart of Accounts mapping">
+                          <span className="gl-code">{c.code}</span><span className="gl-name">{c.name}</span><span className="gl-type">UI-only</span>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+          <span className="small muted">1010 Cash in Bank expands to 7 UI-only subaccounts. Selecting any option reuses the existing ledger filter.</span>
+        </div>
         <label className="f">Business Unit
           <select value={unit} onChange={e => setUnit(e.target.value)}><option>All units</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
         </label>
@@ -176,7 +245,14 @@ function GeneralLedger() {
         {preset === 'Custom' && <label className="f">From<input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>}
         {preset === 'Custom' && <label className="f">To<input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>}
       </div>
-      {!account && (
+      {!account && uiChild && (
+        <div className="notice" style={{ marginTop: 10 }}>
+          <strong>{uiChild.code} — {uiChild.name}</strong> is a UI-only subaccount under 1010 Cash in Bank.
+          It has no Chart of Accounts mapping, so no balances or transactions are shown — nothing is fabricated.
+          Select the <strong>1010 — Cash in Bank</strong> parent to view its posted ledger activity.
+        </div>
+      )}
+      {!account && !uiChild && (
         input.trim()
           ? <div className="warn">No account matches “{input.trim()}”. Pick a code from the Chart of Accounts list above.</div>
           : <div className="notice">Select an account code above to view its posted ledger activity. Nothing is shown until an account is selected — no balances are fabricated.</div>

@@ -61,10 +61,15 @@ export interface NavEntry {
 }
 
 /**
- * Transaction submenu destinations shown to the Warehouse role: New Entry
- * only. Other roles keep the full submenu. Routes themselves are untouched.
+ * Transaction submenu destinations shown to the Warehouse role: New
+ * entry only. Other roles keep the full visible submenu. Routes
+ * themselves (including /admin/transaction-types) are untouched —
+ * transaction-types is hidden from the sidebar but still routable.
  */
 export const WAREHOUSE_TX_SUBS = ['/admin/transaction'];
+
+/** Sidebar-hidden but routable destinations (UI-only hiding, compatibility kept). */
+export const SIDEBAR_HIDDEN_ROUTES = ['/admin/transaction-types'];
 
 /**
  * Navigation visible to a role, derived from the full NAV definition so

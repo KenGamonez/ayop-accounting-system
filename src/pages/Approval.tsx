@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { TxnStatus } from '../data/seed';
 import { canActOnApprovals, canResubmit, isCreator, nextRoleFor } from '../data/ops';
 import { useStore } from '../store/AppStore';
-import { PageHead, Pill, Money, WorkflowSteps } from '../components/ui';
+import { PageHead, Pill, Money, WorkflowSteps, displayStatus } from '../components/ui';
 
 export default function Approval() {
   const { txns, transition, reverseTxn, user } = useStore();
@@ -36,9 +36,31 @@ export default function Approval() {
     setFeedback({ ok: res.ok, text: res.message });
   };
 
+  // Display-only stage counts for the workflow overview. Underlying
+  // TxnStatus values and transitions are reused exactly as stored.
+  const stageCount = (statuses: string[]) => txns.filter(t => statuses.includes(t.status)).length;
+  const stages = [
+    { label: 'New Entry', detail: 'Draft', count: stageCount(['Draft']) },
+    { label: 'Accountant Review', detail: 'For Review', count: stageCount(['For Accountant Review']) },
+    { label: 'Submit for Review', detail: 'For Review', count: stageCount(['Accountant Reviewed']) },
+    { label: 'Approval', detail: 'For Approval', count: stageCount(['For Owner Approval', 'Approved']) },
+  ];
+
   return (
     <>
-      <PageHead title="Approval" sub="Transaction Entry → Accountant Review → Owner / Management Approval → General Ledger posting. Simulated here with local state; pending items never post." />
+      <PageHead title="Approval" sub="New Entry → Accountant Review → Submit for Review → Approval → General Ledger posting. Simulated here with local state; pending items never post." />
+      <div className="card wf-overview" aria-label="Approval workflow overview">
+        <div className="wf-stages">
+          {stages.map((s, i) => (
+            <div key={s.label} className="wf-stage">
+              <div className="wf-step"><span className="wf-num">{i + 1}</span> {s.label}</div>
+              <div className="wf-count">{s.count} {s.count === 1 ? 'item' : 'items'} · <span className="muted">{s.detail}</span></div>
+              {i < stages.length - 1 && <div className="wf-arrow" aria-hidden="true">→</div>}
+            </div>
+          ))}
+        </div>
+        <p className="small muted" style={{ margin: '8px 0 0' }}>Display labels only — review stages read <strong>For Review</strong>, the owner stage reads <strong>For Approval</strong>. Nothing here is approved or posted until its action runs.</p>
+      </div>
       {feedback && <div className={feedback.ok ? 'notice' : 'warn'}>{feedback.text}</div>}
       {!privileged && <div className="notice">You are signed in as {user?.name ?? 'demo'} ({user?.role ?? 'no role'}). Approval, rejection, and posting actions are shown for Accounting and Owner roles in this demo — you can track your own submissions below, and resubmit your own rejected entries for correction.</div>}
       <div className="card">
@@ -57,7 +79,7 @@ export default function Approval() {
                 <div className="small" style={{ color: '#1e3568' }}><strong>Next:</strong> {nextRoleFor(t.status)}</div></td>
               <td>{t.item}<div className="small muted">Supplier: {t.supplier} · Qty {t.quantity} · Acct {t.accountCode}</div><div className="small muted">{t.remarks}</div></td>
               <td className="num"><Money n={t.amount} /></td>
-              <td><Pill status={t.status} /></td>
+              <td><Pill status={t.status} />{displayStatus(t.status) !== t.status && <div className="small muted" style={{ marginTop: 2 }}>{t.status}</div>}</td>
               <td><div className="btn-row">
                 {privileged && t.status === 'For Accountant Review' && <button className="btn small" onClick={() => act(t.id, 'Accountant Reviewed')}>Accountant: Mark reviewed</button>}
                 {privileged && t.status === 'Accountant Reviewed' && <button className="btn small" onClick={() => act(t.id, 'For Owner Approval')}>Forward to owner</button>}

@@ -21,7 +21,9 @@ import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
-import { visibleAccountingTabs } from '../src/pages/Accounting.tsx';
+import { visibleAccountingTabs, isUiCashChild } from '../src/pages/Accounting.tsx';
+import { displayStatus } from '../src/components/ui.tsx';
+import { SIDEBAR_HIDDEN_ROUTES } from '../src/data/access.ts';
 import { seedTransactions } from '../src/data/seed.ts';
 import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
@@ -315,9 +317,26 @@ check('sidebar: GL kept, five links removed, routes untouched',
   && !acctSubs.includes('Audit Trail')
   && acctSubs.includes('Trial Balance') && acctSubs.includes('Month-End Close'), acctSubs);
 const txnSubs = (NAV.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.label);
-check('sidebar: Cash In/Out out of Transaction menu, Type & Classification kept',
-  !txnSubs.includes('Cash In') && !txnSubs.includes('Cash Out')
-  && txnSubs.includes('Type & Classification') && txnSubs.includes('Disbursement') && txnSubs.includes('Journal'), txnSubs);
+const txnTos = (NAV.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.to);
+check('sidebar: Transaction shows New only (no All Transactions link, Type & Classification hidden, routes kept)',
+  txnSubs.join('|') === 'New|Disbursement|Journal'
+  && !txnSubs.some(l => /All Transaction/i.test(l))
+  && !txnSubs.includes('Type & Classification')
+  && txnTos.includes('/admin/transaction') && txnTos.includes('/admin/disbursement') && txnTos.includes('/admin/journal')
+  && SIDEBAR_HIDDEN_ROUTES.includes('/admin/transaction-types')
+  && readFileSync('src/App.tsx', 'utf8').includes('transaction-types')
+  && readFileSync('src/App.tsx', 'utf8').includes('TransactionTypes'), { txnSubs, txnTos });
+check('approval display labels simplify review/approval stages (values unchanged)',
+  displayStatus('For Accountant Review') === 'For Review'
+  && displayStatus('Accountant Reviewed') === 'For Review'
+  && displayStatus('For Owner Approval') === 'For Approval'
+  && displayStatus('Approved') === 'Approved' && displayStatus('Posted') === 'Posted'
+  && displayStatus('Draft') === 'Draft' && displayStatus('Rejected') === 'Rejected');
+check('gl: 1010 children are UI-only (no COA record, no ledger data)',
+  isUiCashChild('1010-1') && isUiCashChild('1010-7')
+  && !isUiCashChild('1010') && !isUiCashChild('1000')
+  && getAccount('1010-1') === null && getAccount('1010')?.name === 'Cash in Bank'
+  && accountLedger([], '1010-1', { unit: 'All units', from: '', to: '' }) === null);
 
 // ---- disbursement entry + date-range search ----
 const goodDis = { date: '2026-10-14', businessUnit: 'Diagnostic Center', particulars: 'Bond paper', supplier: 'PaperLine', accountCode: '5100', amount: 3250 };
@@ -492,8 +511,8 @@ const wLabels = wNav.map(n => n.label);
 check('warehouse nav holds only dashboard + four areas + settings',
   wLabels.join('|') === 'Overview|Transaction|Approval|Inventory|Purchasing (P.O.)|Settings', wLabels);
 const wTxnSubs = (wNav.find(n => n.label === 'Transaction')?.subs ?? []).map(s => s.label);
-check('warehouse transaction menu holds New Entry only',
-  wTxnSubs.join('|') === 'New Entry / All Transactions'
+check('warehouse transaction menu holds New only',
+  wTxnSubs.join('|') === 'New'
   && WAREHOUSE_TX_SUBS.join() === '/admin/transaction', wTxnSubs);
 check('warehouse New Entry hides kind field (default Disbursement kept for submit)',
   roleKindFor('Warehouse') === 'warehouse' && roleKindFor('Accounting') === 'full' && roleKindFor('CEO') === 'full');

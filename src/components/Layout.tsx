@@ -7,12 +7,16 @@ import { canVisit, navFor } from '../data/access';
 export interface Sub { to: string; label: string }
 export interface Item { to: string; label: string; end?: boolean; subs?: Sub[]; dropdownOnly?: boolean }
 
+// Visible sidebar (UI-only): Transaction shows "New" for entry; the
+// "All Transactions" list lives on the same /admin/transaction route and is
+// not a separate sidebar destination. Type & Classification
+// (/admin/transaction-types) is intentionally hidden from the sidebar but
+// its route stays registered in App.tsx for compatibility.
 export const NAV: Item[] = [
   { to: '/admin', label: 'Overview', end: true },
   {
     to: '/admin/transaction', label: 'Transaction', subs: [
-      { to: '/admin/transaction', label: 'New Entry / All Transactions' },
-      { to: '/admin/transaction-types', label: 'Type & Classification' },
+      { to: '/admin/transaction', label: 'New' },
       { to: '/admin/disbursement', label: 'Disbursement' },
       { to: '/admin/journal', label: 'Journal' },
     ],
