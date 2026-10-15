@@ -1,4 +1,4 @@
-export type Classification = 'Expense' | 'Revenue' | 'Asset' | 'Liability';
+export type Classification = 'Expense' | 'Revenue' | 'Asset' | 'Liability' | 'Equity';
 export type TxnStatus = 'Draft' | 'For Accountant Review' | 'Accountant Reviewed' | 'For Owner Approval' | 'Approved' | 'Posted' | 'Rejected' | 'Reversed';
 export type CashKind = 'Cash In' | 'Cash Out' | 'Disbursement' | 'Journal';
 
@@ -36,7 +36,10 @@ export const BUSINESS_UNITS = [
   'Central Warehouse',
 ] as const;
 
-export const CLASSIFICATIONS: Classification[] = ['Expense', 'Revenue', 'Asset', 'Liability'];
+// Classification option only — no account code or debit/credit mapping is
+// invented here. Shared by the entry form, filters, type list, and import
+// validation via this single source of truth.
+export const CLASSIFICATIONS: Classification[] = ['Expense', 'Revenue', 'Asset', 'Liability', 'Equity'];
 
 export const ITEM_CATEGORIES = ['Medical Supplies', 'Medical Equipment', 'Office Supplies'] as const;
 

@@ -7,7 +7,7 @@ dateRangeError, journalTotals, validateJournal, staffIdForName, canActOnApproval
 ownRecords, canResubmit, guardTransition } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
-import { TRANSACTION_KINDS, COA, STAFF } from '../src/data/seed.ts';
+import { TRANSACTION_KINDS, COA, STAFF, CLASSIFICATIONS } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
 import { DEMO_USERNAME, DEMO_PASSWORD, DEMO_AUTH_KEY, verifyDemoLogin } from '../src/data/demoAccess.ts';
@@ -333,7 +333,8 @@ check('approval display labels simplify review/approval stages (values unchanged
   && displayStatus('Approved') === 'Approved' && displayStatus('Posted') === 'Posted'
   && displayStatus('Draft') === 'Draft' && displayStatus('Rejected') === 'Rejected');
 check('gl: 1010 children are UI-only (no COA record, no ledger data)',
-  isUiCashChild('1010-1') && isUiCashChild('1010-7')
+  isUiCashChild('1010-1') && isUiCashChild('1010-5')
+  && !isUiCashChild('1010-6') && !isUiCashChild('1010-7')
   && !isUiCashChild('1010') && !isUiCashChild('1000')
   && getAccount('1010-1') === null && getAccount('1010')?.name === 'Cash in Bank'
   && accountLedger([], '1010-1', { unit: 'All units', from: '', to: '' }) === null);
@@ -343,20 +344,55 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   // and the hover/tap/keyboard wiring must be present in source + styles.
   const glSrc = readFileSync('src/pages/Accounting.tsx', 'utf8');
   const css = readFileSync('src/styles.css', 'utf8');
-  const childCodes = ['1010-1', '1010-2', '1010-3', '1010-4', '1010-5', '1010-6', '1010-7'];
-  check('gl: single bank control — no boxed Cash on Hand, 1000 still searchable, all 7 banks kept (static)',
+  const childCodes = ['1010-1', '1010-2', '1010-3', '1010-4', '1010-5'];
+  check('gl: single bank control — no boxed Cash on Hand, 1000 still searchable, 5 banks kept (static)',
     childCodes.every(c => glSrc.includes(`'${c}'`))
+    && !glSrc.includes("'1010-6'") && !glSrc.includes("'1010-7'")
     && glSrc.includes('onMouseEnter') && glSrc.includes('onMouseLeave')
     && glSrc.includes("e.key === 'Escape'") && glSrc.includes('aria-haspopup="menu"')
     && glSrc.includes('gl-bank-submenu') && glSrc.includes('gl-hoverwrap') && glSrc.includes('gl-flyout')
     && glSrc.includes('gl-bankpick') && !glSrc.includes('gl-cashpair') && !glSrc.includes('cash1000')
     && !glSrc.includes('expanded1010') && !glSrc.includes('showChildren')
     && glSrc.includes('Choose a bank subaccount.') && !glSrc.includes('tap ▸ on touch')
+    && glSrc.includes('5 subaccounts')
     && getAccount('1000')?.name === 'Cash on Hand'
     && glSrc.includes('filtered.map')
     && css.includes('.gl-flyout') && css.includes('.gl-hoverwrap') && css.includes('.gl-bankpick')
     && !css.includes('.gl-cashpair') && css.includes('z-index: 60'),
     { hover: glSrc.includes('onMouseEnter') });
+  // Parent 1010 stays selectable as the total account through the existing
+  // filter: a posted txn coded 1010 appears in its ledger. No consolidation
+  // is invented — children are UI-only and unmapped, so only 1010-coded
+  // rows can ever appear here.
+  const parentLedger = accountLedger(
+    [mkTxn({ id: 'P1010', date: '2026-10-05', status: 'Posted', classification: 'Asset', amount: 5000, accountCode: '1010', accountName: 'Cash in Bank' })],
+    '1010', { unit: 'All units', from: '', to: '' });
+  check('gl: parent 1010 selectable — existing filter shows its eligible posted txns only',
+    parentLedger !== null && parentLedger.account.code === '1010'
+    && parentLedger.lines.length === 1 && parentLedger.lines[0].ref === 'P1010'
+    && parentLedger.closing === 5000, parentLedger);
+  // Equity classification option: present alongside the original four, and
+  // accepted by import validation (same shared CLASSIFICATIONS source as the
+  // entry form). No account code or posting mapping is invented.
+  check('equity classification selectable alongside the original four',
+    CLASSIFICATIONS.join() === 'Expense,Revenue,Asset,Liability,Equity');
+  const eqRows = validateRows('transactions', [
+    { Date: '2026-10-14', 'Business Unit': 'Pharmacy', Classification: 'Equity', Kind: 'Journal', Item: 'Owner capital infusion', Category: 'Office Supplies', Supplier: 'N/A', 'Supplier Price': 0, 'Retail Price': 0, Quantity: 1, Amount: 50000 },
+  ], mapping, new Set());
+  check('equity classification passes import validation without errors',
+    eqRows.length === 1 && eqRows[0].errors.length === 0 && eqRows[0].data.classification === 'Equity', eqRows[0]);
+  // Sidebar readability/active styling (static): parent links keep light text
+  // on the dark sidebar even when the router marks them active, and submenu
+  // active items use the restrained highlight instead of a white block.
+  {
+    const layoutCss = readFileSync('src/styles.css', 'utf8');
+    const parentRule = /\.nav-parent[^{]*a\.active\s*\{[^}]*color:\s*#dbe3f5/s.test(layoutCss);
+    const subRule = /\.nav-subs a\.sub-active\s*\{[^}]*background:\s*rgba\(255,255,255,\.1/s.test(layoutCss)
+      && /\.nav-subs a\.sub-active\s*\{[^}]*color:\s*#fff/s.test(layoutCss);
+    const noWhiteSub = !/\.nav-subs a\.sub-active\s*\{[^}]*background:\s*#fff/s.test(layoutCss);
+    check('sidebar: parent label readable on dark bg, submenu active restrained (static)',
+      parentRule && subRule && noWhiteSub);
+  }
 }
 
 // ---- disbursement entry + date-range search ----

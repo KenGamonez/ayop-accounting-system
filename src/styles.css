@@ -62,12 +62,20 @@ a:hover { text-decoration: underline; }
 .nav-parent { display: flex; align-items: center; gap: 2px; }
 .nav-parent a { flex: 1; }
 .nav-parent.active-parent > a { background: rgba(255,255,255,.08); }
+/* Parent links auto-receive .active from the router when their section is
+   current. Without this override, .nav a.active's navy text would combine
+   with the dark active-parent background and become unreadable — parents
+   keep the same light-on-navy treatment as the other sidebar labels. */
+.nav-parent > a.active, .nav-parent.active-parent > a.active { background: rgba(255,255,255,.08); color: #dbe3f5; font-weight: 600; }
+.nav-parent > a.active .dot, .nav-parent.active-parent > a.active .dot { background: #aebad6; }
 .nav-toggle { background: transparent; border: none; color: #aebad6; cursor: pointer; font-size: 13px; padding: 8px 10px; border-radius: 7px; }
 .nav-toggle:hover { background: rgba(255,255,255,.1); color: #fff; }
 .nav-subs { display: flex; flex-direction: column; margin: 1px 0 3px 17px; border-left: 1px solid rgba(255,255,255,.16); padding-left: 6px; }
 .nav-subs a { font-size: 12.8px; padding: 6px 10px; color: #b9c4e2; }
 .nav-subs a:hover { background: rgba(255,255,255,.07); color: #fff; }
-.nav-subs a.sub-active { background: #fff; color: var(--navy); font-weight: 600; }
+/* Restrained submenu active state: same family as hover, with brighter text
+   and weight marking the current page — no conspicuous white block. */
+.nav-subs a.sub-active { background: rgba(255,255,255,.1); color: #fff; font-weight: 600; }
 .next-action { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; background: #f2f6ff; border: 1px solid #c6d6f8; border-radius: 8px; padding: 10px 12px; font-size: 13px; color: var(--navy); margin-bottom: 12px; }
 .next-action .btn { margin-left: auto; }
 

@@ -134,8 +134,6 @@ const CASH_IN_BANK_CHILDREN = [
   { code: '1010-3', name: 'CIB - PSB' },
   { code: '1010-4', name: 'CIB - SB' },
   { code: '1010-5', name: 'CIB - RCBC' },
-  { code: '1010-6', name: 'CIB - LBP SPPDC' },
-  { code: '1010-7', name: 'CIB - LBP JEM PHARMACY' },
 ];
 
 /** UI-only helper: is this code one of the supplied (unmapped) children? */
@@ -205,7 +203,7 @@ function GeneralLedger() {
                   <button type="button" className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)} aria-haspopup="menu" aria-expanded={cashOpen} aria-controls="gl-bank-submenu" title="Select 1010 Cash in Bank">
                     <span className="gl-code">{parent1010.code}</span><span className="gl-name"><strong>{parent1010.name}</strong></span>
                   </button>
-                  <span className="gl-subcount">7 subaccounts</span>
+                  <span className="gl-subcount">5 subaccounts</span>
                   <button type="button" className="gl-expand" onClick={() => setCashOpen(v => !v)} aria-expanded={cashOpen} aria-controls="gl-bank-submenu" aria-label={(cashOpen ? 'Collapse' : 'Expand') + ' bank subaccounts'}>
                     {cashOpen ? '▾' : '▸'}
                   </button>
