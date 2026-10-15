@@ -337,6 +337,23 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   && !isUiCashChild('1010') && !isUiCashChild('1000')
   && getAccount('1010-1') === null && getAccount('1010')?.name === 'Cash in Bank'
   && accountLedger([], '1010-1', { unit: 'All units', from: '', to: '' }) === null);
+{
+  // Static guard for the hover-flyout fix: the previous click-only expander
+  // (no pointer handlers, children gated on expand state) must stay gone,
+  // and the hover/tap/keyboard wiring must be present in source + styles.
+  const glSrc = readFileSync('src/pages/Accounting.tsx', 'utf8');
+  const css = readFileSync('src/styles.css', 'utf8');
+  const childCodes = ['1010-1', '1010-2', '1010-3', '1010-4', '1010-5', '1010-6', '1010-7'];
+  check('gl: 1010 flyout opens on hover, closes cleanly, all 7 banks listed (static)',
+    childCodes.every(c => glSrc.includes(`'${c}'`))
+    && glSrc.includes('onMouseEnter') && glSrc.includes('onMouseLeave')
+    && glSrc.includes("e.key === 'Escape'") && glSrc.includes('aria-haspopup="menu"')
+    && glSrc.includes('gl-bank-submenu') && glSrc.includes('gl-hoverwrap') && glSrc.includes('gl-flyout')
+    && glSrc.includes('gl-cashpair') && glSrc.includes("code === '1000'")
+    && !glSrc.includes('expanded1010') && !glSrc.includes('showChildren')
+    && css.includes('.gl-flyout') && css.includes('.gl-hoverwrap') && css.includes('.gl-cashpair')
+    && css.includes('z-index: 60'), { hover: glSrc.includes('onMouseEnter') });
+}
 
 // ---- disbursement entry + date-range search ----
 const goodDis = { date: '2026-10-14', businessUnit: 'Diagnostic Center', particulars: 'Bond paper', supplier: 'PaperLine', accountCode: '5100', amount: 3250 };

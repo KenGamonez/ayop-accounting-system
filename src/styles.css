@@ -168,14 +168,24 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; co
 .gl-code { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--navy); min-width: 56px; }
 .gl-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gl-type { font-size: 11px; color: var(--muted); }
-.gl-parent-block { border-top: 1px solid var(--line); margin-top: 2px; padding-top: 2px; }
-.gl-parent { background: #f7f9fd; }
-.gl-parent .gl-pick { display: flex; align-items: center; gap: 8px; flex: 1; background: transparent; border: none; font: inherit; cursor: pointer; text-align: left; min-width: 0; padding: 0; color: inherit; }
+.gl-cashpair { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-top: 6px; }
+.gl-cashbtn { display: flex; align-items: center; gap: 8px; font: inherit; font-size: 12.5px; color: var(--ink); background: #f7f9fd; border: 1px solid #cfd6e4; border-radius: 8px; padding: 7px 9px; cursor: pointer; text-align: left; min-width: 0; }
+.gl-cashbtn:hover { border-color: var(--accent); background: #f2f6ff; }
+.gl-cashbtn.selected { background: var(--accent-soft); border-color: #9dbcf3; box-shadow: inset 0 0 0 1px #c6d6f8; }
+/* Hover wrapper owns both the parent trigger and the flyout, so the pointer
+   travels between them with no gap that could close the menu. The flyout
+   lives outside the scrollable .gl-list, so no ancestor clips it. */
+.gl-hoverwrap { position: relative; min-width: 0; z-index: 60; }
+.gl-parentbtn { width: 100%; }
+.gl-parentbtn .gl-pick { display: flex; align-items: center; gap: 8px; flex: 1; background: transparent; border: none; font: inherit; cursor: pointer; text-align: left; min-width: 0; padding: 0; color: inherit; }
 .gl-expand { background: #fff; border: 1px solid #cfd6e4; border-radius: 6px; width: 24px; height: 24px; cursor: pointer; font-size: 12px; line-height: 1; flex-shrink: 0; color: var(--navy); }
-.gl-badge { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .05em; background: var(--navy); color: #fff; border-radius: 999px; padding: 1px 7px; margin-left: 4px; vertical-align: 1px; }
-.gl-children { margin: 2px 0 2px 32px; border-left: 2px solid #c6d6f8; padding-left: 4px; display: flex; flex-direction: column; gap: 1px; }
+.gl-expand:hover { border-color: var(--accent); }
+.gl-flyout { position: absolute; top: calc(100% - 1px); left: 0; min-width: 100%; width: max-content; max-width: min(320px, 78vw); background: #fff; border: 1px solid #cfd6e4; border-radius: 8px; box-shadow: 0 8px 24px rgba(20, 35, 74, .14); padding: 4px; z-index: 60; opacity: 0; transform: translateY(-4px); visibility: hidden; transition: opacity .14s ease, transform .14s ease, visibility 0s linear .14s; }
+.gl-flyout.open { opacity: 1; transform: none; visibility: visible; transition: opacity .14s ease, transform .14s ease; }
 .gl-child { font-size: 12px; padding: 5px 8px; }
 .gl-child .gl-code { color: var(--navy-2); }
+.gl-flyout .gl-child { border-left: 2px solid #c6d6f8; border-radius: 0 6px 6px 0; }
+.gl-searchchild { border-left: 2px solid #c6d6f8; border-radius: 0 6px 6px 0; margin-left: 24px; width: calc(100% - 24px); }
 .gl-empty { padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
 
 /* login */
@@ -235,5 +245,6 @@ label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12.5px; co
   .wf-stage { min-width: 0; }
   .wf-arrow { display: none; }
   .gl-searchrow { flex-wrap: wrap; }
-  .gl-children { margin-left: 16px; }
+  .gl-cashpair { grid-template-columns: 1fr; }
+  .gl-flyout { max-width: calc(100vw - 48px); }
 }
