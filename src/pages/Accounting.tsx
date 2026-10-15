@@ -128,7 +128,7 @@ function presetRange(preset: GLPreset, year: number, sub: number, customFrom: st
  * or ledger data is created. Selecting one reuses the existing
  * account-selection path and lands on an explicit unconfigured state.
  */
-const CASH_IN_BANK_CHILDREN = [
+export const CASH_IN_BANK_CHILDREN = [
   { code: '1010-1', name: 'LBP SPPDC' },
   { code: '1010-2', name: 'LBP JEM Pharmacy' },
   { code: '1010-3', name: 'CIB PSB' },
@@ -153,6 +153,31 @@ export interface BankChoice { code: string; name: string }
 export function bankDropdownChoices(): BankChoice[] {
   const parent = getAccount('1010');
   return [{ code: '1010', name: parent ? parent.name : 'Cash in Bank' }, ...CASH_IN_BANK_CHILDREN];
+}
+
+/** Parent code that activates the bank sub-account rule on entry forms. */
+export const CASH_IN_BANK_CODE = '1010';
+
+/**
+ * Frontend-only entry rule (pure, tested): keep the chosen sub-account only
+ * while the parent 1010 account is selected; any other account clears it so
+ * stale values can never remain or be submitted.
+ */
+export function coerceBankSub(accountCode: string, sub: string): string {
+  return (accountCode ?? '').trim() === CASH_IN_BANK_CODE ? (sub ?? '') : '';
+}
+
+/**
+ * Frontend-only validity message (pure, tested): selecting the parent Cash
+ * in Bank account requires one of its existing sub-accounts. Returns null
+ * when the current selection is acceptable. Never a GL account — children
+ * stay UI-only and the chart of accounts is unchanged.
+ */
+export function bankSubError(accountCode: string, sub: string): string | null {
+  if ((accountCode ?? '').trim() !== CASH_IN_BANK_CODE) return null;
+  return (sub ?? '').trim()
+    ? null
+    : 'Account Title is 1010 — Cash in Bank: choose one of its five bank sub-accounts before submitting.';
 }
 
 function GeneralLedger() {

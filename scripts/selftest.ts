@@ -21,7 +21,7 @@ import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
-import { visibleAccountingTabs, isUiCashChild, bankDropdownChoices } from '../src/pages/Accounting.tsx';
+import { visibleAccountingTabs, isUiCashChild, bankDropdownChoices, CASH_IN_BANK_CHILDREN, coerceBankSub, bankSubError } from '../src/pages/Accounting.tsx';
 import { displayStatus } from '../src/components/ui.tsx';
 import { SIDEBAR_HIDDEN_ROUTES } from '../src/data/access.ts';
 import { seedTransactions } from '../src/data/seed.ts';
@@ -386,6 +386,29 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     && /className="gl-hoverwrap"\s+onMouseEnter=\{\(\) => setCashOpen\(true\)\}/.test(glSrc)
     && css.includes('top: calc(100% - 1px)')
     && glSrc.includes('<strong>Cash in Bank</strong>'));
+  // Entry-form sub-account rule (pure): required under parent 1010, cleared
+  // everywhere else so stale values can never remain or be submitted.
+  check('entry: bank sub-account required for 1010, cleared otherwise',
+    bankSubError('1010', '') !== null && bankSubError('1010', '   ') !== null
+    && bankSubError('1010', '1010-2') === null
+    && bankSubError('5000', '') === null && bankSubError('5000', '1010-1') === null
+    && bankSubError('', '') === null
+    && coerceBankSub('1010', '1010-3') === '1010-3' && coerceBankSub('1010', '') === ''
+    && coerceBankSub('5000', '1010-3') === '' && coerceBankSub('1000', '1010-1') === '');
+  // Entry form reuses the exact approved bank choices, keeps the sub-account
+  // out of the save payload (backend pending), and preserves the 8-field
+  // sketch arrangement with existing data fields intact (static).
+  {
+    const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
+    check('entry: form wires the approved sub-accounts with isolated state (static)',
+      CASH_IN_BANK_CHILDREN.length === 5
+      && txnSrc.includes("from './Accounting'")
+      && txnSrc.includes('CASH_IN_BANK_CHILDREN') && txnSrc.includes('coerceBankSub') && txnSrc.includes('bankSubError')
+      && txnSrc.includes('Cash in Bank Sub-account') && txnSrc.includes('Account Title')
+      && txnSrc.includes('Counterparty') && txnSrc.includes('Particulars')
+      && txnSrc.includes('bankSub: _notPersisted')
+      && txnSrc.includes('backend') && txnSrc.includes('pending'));
+  }
   // Shared catalog: 2200 Accrued Income resolves everywhere the shared COA
   // is used (GL lookup/options, Disbursement + Journal validation), with all
   // prior accounts intact. No posting rule is invented here.
