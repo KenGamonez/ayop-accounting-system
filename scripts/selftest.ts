@@ -344,15 +344,19 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   const glSrc = readFileSync('src/pages/Accounting.tsx', 'utf8');
   const css = readFileSync('src/styles.css', 'utf8');
   const childCodes = ['1010-1', '1010-2', '1010-3', '1010-4', '1010-5', '1010-6', '1010-7'];
-  check('gl: 1010 flyout opens on hover, closes cleanly, all 7 banks listed (static)',
+  check('gl: single bank control — no boxed Cash on Hand, 1000 still searchable, all 7 banks kept (static)',
     childCodes.every(c => glSrc.includes(`'${c}'`))
     && glSrc.includes('onMouseEnter') && glSrc.includes('onMouseLeave')
     && glSrc.includes("e.key === 'Escape'") && glSrc.includes('aria-haspopup="menu"')
     && glSrc.includes('gl-bank-submenu') && glSrc.includes('gl-hoverwrap') && glSrc.includes('gl-flyout')
-    && glSrc.includes('gl-cashpair') && glSrc.includes("code === '1000'")
+    && glSrc.includes('gl-bankpick') && !glSrc.includes('gl-cashpair') && !glSrc.includes('cash1000')
     && !glSrc.includes('expanded1010') && !glSrc.includes('showChildren')
-    && css.includes('.gl-flyout') && css.includes('.gl-hoverwrap') && css.includes('.gl-cashpair')
-    && css.includes('z-index: 60'), { hover: glSrc.includes('onMouseEnter') });
+    && glSrc.includes('Choose a bank subaccount.') && !glSrc.includes('tap ▸ on touch')
+    && getAccount('1000')?.name === 'Cash on Hand'
+    && glSrc.includes('filtered.map')
+    && css.includes('.gl-flyout') && css.includes('.gl-hoverwrap') && css.includes('.gl-bankpick')
+    && !css.includes('.gl-cashpair') && css.includes('z-index: 60'),
+    { hover: glSrc.includes('onMouseEnter') });
 }
 
 // ---- disbursement entry + date-range search ----

@@ -148,10 +148,8 @@ function GeneralLedger() {
   const options = useMemo(() => accountOptions(), []);
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
-  // Hover/tap/keyboard state for the 1010 Cash in Bank flyout. The previous
-  // click-to-expand block inside the scrollable list never opened on hover
-  // (no pointer handlers at all) and buried 1010 at the bottom of the list,
-  // so it is replaced by this always-visible cash pair + flyout.
+  // Hover/tap/keyboard state for the 1010 Cash in Bank flyout (the single
+  // dedicated bank-subaccount control; other accounts use the search list).
   const [cashOpen, setCashOpen] = useState(false);
   const [unit, setUnit] = useState('All units');
   const [preset, setPreset] = useState<GLPreset>('Monthly');
@@ -180,7 +178,6 @@ function GeneralLedger() {
   const matches = (c: string, n: string) => !q || c.toLowerCase().includes(q) || n.toLowerCase().includes(q) || `${c} — ${n}`.toLowerCase().includes(q);
   const filtered = options.filter(o => matches(o.code, o.name));
   const filteredChildren = CASH_IN_BANK_CHILDREN.filter(c => matches(c.code, c.name));
-  const cash1000 = options.find(o => o.code === '1000');
   const parent1010 = options.find(o => o.code === '1010');
   const pick = (c: string, n: string) => { setInput(`${c} — ${n}`); setOpen(false); setCashOpen(false); };
 
@@ -194,13 +191,8 @@ function GeneralLedger() {
             {input && <button type="button" className="btn ghost small" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">Clear</button>}
             <button type="button" className="btn ghost small" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={open ? 'Collapse account list' : 'Expand account list'}>{open ? '▾' : '▸'}</button>
           </div>
-          <div className="gl-cashpair" aria-label="Cash accounts quick pick">
-            {cash1000 && (
-              <button type="button" className={'gl-cashbtn' + (code === '1000' ? ' selected' : '')} onClick={() => pick(cash1000.code, cash1000.name)} aria-pressed={code === '1000'}>
-                <span className="gl-code">{cash1000.code}</span><span className="gl-name">{cash1000.name}</span>
-              </button>
-            )}
-            {parent1010 && (
+          {parent1010 && (
+            <div className="gl-bankpick" aria-label="Cash in Bank subaccount picker">
               <div
                 className="gl-hoverwrap"
                 onMouseEnter={() => setCashOpen(true)}
@@ -210,10 +202,11 @@ function GeneralLedger() {
                 onKeyDown={e => { if (e.key === 'Escape') { setCashOpen(false); (e.currentTarget.querySelector('.gl-cashbtn') as HTMLElement | null)?.focus(); } }}
               >
                 <div className={'gl-cashbtn gl-parentbtn' + (code === '1010' ? ' selected' : '')}>
-                  <button type="button" className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)} aria-haspopup="menu" aria-expanded={cashOpen} aria-controls="gl-bank-submenu" title="Select 1010 Cash in Bank (parent)">
+                  <button type="button" className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)} aria-haspopup="menu" aria-expanded={cashOpen} aria-controls="gl-bank-submenu" title="Select 1010 Cash in Bank">
                     <span className="gl-code">{parent1010.code}</span><span className="gl-name"><strong>{parent1010.name}</strong></span>
                   </button>
-                  <button type="button" className="gl-expand" onClick={() => setCashOpen(v => !v)} aria-expanded={cashOpen} aria-controls="gl-bank-submenu" aria-label={(cashOpen ? 'Collapse' : 'Expand') + ' bank subaccounts (tap alternative to hover)'}>
+                  <span className="gl-subcount">7 subaccounts</span>
+                  <button type="button" className="gl-expand" onClick={() => setCashOpen(v => !v)} aria-expanded={cashOpen} aria-controls="gl-bank-submenu" aria-label={(cashOpen ? 'Collapse' : 'Expand') + ' bank subaccounts'}>
                     {cashOpen ? '▾' : '▸'}
                   </button>
                 </div>
@@ -225,14 +218,14 @@ function GeneralLedger() {
                   ))}
                 </div>
               </div>
-            )}
-          </div>
+            </div>
+          )}
           {open && (
             <div className="gl-list" id="gl-account-list" role="listbox" aria-label="Chart of Accounts">
               {filtered.length === 0 && filteredChildren.length === 0 && <div className="gl-empty">No accounts match “{input.trim()}”.</div>}
               {filtered.map(o => (
                 <button key={o.code} type="button" role="option" aria-selected={code === o.code} className={'gl-opt' + (code === o.code ? ' selected' : '')} onClick={() => pick(o.code, o.name)}>
-                  <span className="gl-code">{o.code}</span><span className="gl-name">{o.name}{o.code === '1010' ? ' — hover for 7 bank subaccounts' : ''}</span><span className="gl-type">{o.type}</span>
+                  <span className="gl-code">{o.code}</span><span className="gl-name">{o.name}</span><span className="gl-type">{o.type}</span>
                 </button>
               ))}
               {q.length > 0 && filteredChildren.map(c => (
@@ -242,7 +235,7 @@ function GeneralLedger() {
               ))}
             </div>
           )}
-          <span className="small muted">Hover <strong>1010 Cash in Bank</strong> for its 7 UI-only bank subaccounts (tap ▸ on touch, Tab/Escape on keyboard). Selecting any option reuses the existing ledger filter.</span>
+          <span className="small muted">Choose a bank subaccount.</span>
         </div>
         <label className="f">Business Unit
           <select value={unit} onChange={e => setUnit(e.target.value)}><option>All units</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
