@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { BUSINESS_UNITS, COA, peso } from '../data/seed';
+import { BUSINESS_UNITS, COA } from '../data/seed';
 import { dateRangeError, inDateRange, validateDisbursement } from '../data/ops';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
@@ -20,7 +20,6 @@ export default function Disbursement() {
     && (unit === 'All' || t.businessUnit === unit)
     && (rangeErr ? true : inDateRange(t.date, from, to))
   ), [txns, unit, from, to, rangeErr]);
-  const postedTotal = rows.filter(t => t.status === 'Posted').reduce((s, t) => s + t.amount, 0);
 
   const submit = async () => {
     const amount = form.amount.trim() === '' ? null : Number(form.amount);
@@ -73,12 +72,6 @@ export default function Disbursement() {
           </div>
         </div>
       )}
-      <div className="grid g4">
-        <div className="kpi"><div className="lbl">Matching entries</div><div className="val">{rows.length}</div></div>
-        <div className="kpi"><div className="lbl">Posted total</div><div className="val">{peso(postedTotal)}</div><div className="sub">Pending excluded</div></div>
-        <div className="kpi"><div className="lbl">Pending</div><div className="val">{rows.filter(t => !['Posted', 'Reversed'].includes(t.status)).length}</div></div>
-        <div className="kpi"><div className="lbl">Rejected</div><div className="val">{rows.filter(t => t.status === 'Rejected').length}</div></div>
-      </div>
       <div className="card">
         <div className="filters">
           <select value={unit} onChange={e => setUnit(e.target.value)}><option>All</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>

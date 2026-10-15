@@ -71,10 +71,13 @@ export default function Transactions() {
     setFormError('');
   };
 
+  const bankSubLabel = form.bankSub
+    ? `${form.bankSub} — ${CASH_IN_BANK_CHILDREN.find(c => c.code === form.bankSub)?.name ?? ''}`
+    : '— None —';
+
   return (
     <>
       <PageHead title="Transaction" sub="Transaction Entry — first step of the staff workflow. New entries go for review; they are not posted." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
-      <div className="next-action no-print"><span><strong>Next action:</strong> {show ? 'fill in Counterparty, Amount, and Particulars, then submit for review.' : 'open the entry form, or resubmit a rejected row below.'}</span>{!show && <button className="btn small blue" onClick={() => setShow(true)}>Start an entry</button>}</div>
       {show && (
         <div className="card txn-entry">
           <h3>New transaction entry</h3>
@@ -102,9 +105,29 @@ export default function Transactions() {
             <label className="f">Amount (₱)<input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} placeholder="Enter the amount in pesos" /></label>
             <label className="f full">Particulars<textarea rows={2} value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} placeholder="Receipt / OR / SI reference" /></label>
           </div>
-          <div className="btn-row" style={{ marginTop: 10 }}>
+          <div className="btn-row no-print" style={{ marginTop: 10 }}>
             <button className="btn" onClick={submit}>Submit for Review</button>
-            <span className="small muted">Demo: entry is saved locally and queued — nothing is posted yet.</span>
+            <button className="btn ghost" onClick={() => window.print()}>Print entry</button>
+            <span className="small muted">Demo: entry is saved locally and queued — nothing is posted yet. Printing never submits or saves.</span>
+          </div>
+          <div className="print-entry" aria-label="Printable draft of the current entry">
+            <div className="print-head">
+              <div className="print-company">Ayop Group of Companies — JEM51 Accounting System</div>
+              <h2>New Transaction Entry (draft)</h2>
+              <div className="print-meta">DRAFT — not submitted, not posted. Values shown exactly as entered on screen.</div>
+              <div className="print-demo">SYNTHETIC DEMONSTRATION DATA — requires accounting validation before production use.</div>
+            </div>
+            <div className="tbl-wrap"><table className="tbl"><tbody>
+              <tr><td><strong>Date</strong></td><td>{form.date || '—'}</td></tr>
+              <tr><td><strong>Business Unit</strong></td><td>{form.businessUnit}</td></tr>
+              <tr><td><strong>Account Title</strong></td><td>{form.accountCode} — {form.accountName}</td></tr>
+              <tr><td><strong>Transaction Kind</strong></td><td>{form.kind}</td></tr>
+              <tr><td><strong>Counterparty</strong></td><td>{form.supplier || '—'}</td></tr>
+              <tr><td><strong>Classification</strong></td><td>{form.classification}</td></tr>
+              <tr><td><strong>Cash in Bank Sub-account</strong></td><td>{bankSubLabel}</td></tr>
+              <tr><td><strong>Amount</strong></td><td className="num"><Money n={form.amount} /></td></tr>
+              <tr><td><strong>Particulars</strong></td><td>{form.remarks || '—'}</td></tr>
+            </tbody></table></div>
           </div>
         </div>
       )}

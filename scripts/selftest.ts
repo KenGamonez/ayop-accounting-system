@@ -424,6 +424,46 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && !txnSrc.includes('go to Accountant Review')
       && txnSrc.includes('const item = form.remarks.trim()')
       && txnSrc.includes("category: 'Medical Supplies'"));
+  // Start-an-Entry card removed: the duplicate strip (and its Start button)
+  // is gone from the Transaction screen while + New Transaction stays the
+  // single entry point to the untouched entry form.
+  {
+    const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
+    check('entry: Start-an-Entry card removed, + New Transaction kept (static)',
+      !txnSrc.includes('next-action') && !txnSrc.includes('Start an entry')
+      && txnSrc.includes('+ New transaction')
+      && txnSrc.includes('New transaction entry')
+      && txnSrc.includes('>Submit for Review</button>'));
+  }
+  // New Entry print support (static): a Print action opens the browser
+  // print dialog without submitting anything, and a screen-hidden draft
+  // summary (explicitly marked unsaved) is the only entry content shown on
+  // paper while the interactive form hides via print CSS.
+  {
+    const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
+    const printCss = readFileSync('src/styles.css', 'utf8');
+    check('entry: Print action with unsaved-draft printout, form hidden on paper (static)',
+      txnSrc.includes('Print entry') && txnSrc.includes('window.print()')
+      && txnSrc.includes('print-entry') && txnSrc.includes('New Transaction Entry (draft)')
+      && txnSrc.includes('DRAFT — not submitted, not posted')
+      && txnSrc.includes('Printing never submits or saves')
+      && printCss.includes('.print-entry { display: none; }')
+      && printCss.includes('.txn-entry .form-grid, .txn-entry .btn-row, .txn-entry .steps'));
+  }
+  // Disbursement metrics removed (static): the four summary KPIs and their
+  // counts/amounts are gone, while the entry form, filters, search, status
+  // indicators, table, and actions remain wired to the same data.
+  {
+    const disSrc = readFileSync('src/pages/Disbursement.tsx', 'utf8');
+    check('disbursement: summary metrics removed, list and actions intact (static)',
+      !disSrc.includes('Matching entries') && !disSrc.includes('Posted total')
+      && !disSrc.includes('Pending excluded') && !disSrc.includes('postedTotal')
+      && !disSrc.includes('lbl">Pending') && !disSrc.includes('lbl">Rejected')
+      && disSrc.includes('Record a disbursement') && disSrc.includes('+ Record disbursement')
+      && disSrc.includes('Start Date') && disSrc.includes('Particulars / Payment details')
+      && disSrc.includes('validateDisbursement') && disSrc.includes('<Pill status='));
+  }
+  // End of Disbursement-metrics removal check block.
   }
   // Shared catalog: 2200 Accrued Income resolves everywhere the shared COA
   // is used (GL lookup/options, Disbursement + Journal validation), with all
