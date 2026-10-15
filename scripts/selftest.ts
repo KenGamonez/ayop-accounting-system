@@ -21,7 +21,7 @@ import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
 import { NAV } from '../src/components/Layout.tsx';
 import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Reports.tsx';
-import { visibleAccountingTabs, isUiCashChild } from '../src/pages/Accounting.tsx';
+import { visibleAccountingTabs, isUiCashChild, bankDropdownChoices } from '../src/pages/Accounting.tsx';
 import { displayStatus } from '../src/components/ui.tsx';
 import { SIDEBAR_HIDDEN_ROUTES } from '../src/data/access.ts';
 import { seedTransactions } from '../src/data/seed.ts';
@@ -371,6 +371,31 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     parentLedger !== null && parentLedger.account.code === '1010'
     && parentLedger.lines.length === 1 && parentLedger.lines[0].ref === 'P1010'
     && parentLedger.closing === 5000, parentLedger);
+  // Dedicated bank dropdown holds exactly the six ordered choices: parent
+  // total first, then the five subaccounts with their exact labels.
+  const bankChoices = bankDropdownChoices().map(c => `${c.code} — ${c.name}`);
+  check('gl: bank dropdown holds exactly the six ordered choices (parent first)',
+    bankChoices.join('|') === '1010 — Cash in Bank|1010-1 — LBP SPPDC|1010-2 — LBP JEM Pharmacy|1010-3 — CIB PSB|1010-4 — CIB SB|1010-5 — CIB RCBC', bankChoices);
+  // Whole-pill hover on both selectors (static): the bank pill opens from
+  // anywhere on its wrapper (not just the chevron) and stays open across the
+  // gap-free trigger/menu region; the main search row opens its list on
+  // hover and only auto-closes on leaving the combined region while idle.
+  check('gl: whole-pill hover opens both dropdowns, gap-free region close (static)',
+    glSrc.includes('className="gl-searchrow" onMouseEnter={() => setOpen(true)}')
+    && glSrc.includes('onMouseLeave={() => { if (document.activeElement !== searchRef.current) setOpen(false); }}')
+    && /className="gl-hoverwrap"\s+onMouseEnter=\{\(\) => setCashOpen\(true\)\}/.test(glSrc)
+    && css.includes('top: calc(100% - 1px)')
+    && glSrc.includes('<strong>Cash in Bank</strong>'));
+  // Shared catalog: 2200 Accrued Income resolves everywhere the shared COA
+  // is used (GL lookup/options, Disbursement + Journal validation), with all
+  // prior accounts intact. No posting rule is invented here.
+  check('coa: 2200 Accrued Income shared across GL, Disbursement, Journal paths',
+    getAccount('2200')?.name === 'Accrued Income' && getAccount('2200')?.type === 'Asset'
+    && accountOptions().some(o => o.code === '2200' && o.name === 'Accrued Income')
+    && getAccount('1010')?.name === 'Cash in Bank' && getAccount('1000')?.name === 'Cash on Hand'
+    && validateDisbursement({ date: '2026-10-14', businessUnit: 'Pharmacy', particulars: 'Accrued service income', supplier: 'PhilHealth', accountCode: '2200', amount: 12500 }).length === 0
+    && readFileSync('src/pages/Disbursement.tsx', 'utf8').includes("from '../data/seed'")
+    && readFileSync('src/pages/Disbursement.tsx', 'utf8').includes('COA.map'));
   // Equity classification option: present alongside the original four, and
   // accepted by import validation (same shared CLASSIFICATIONS source as the
   // entry form). No account code or posting mapping is invented.

@@ -152,6 +152,10 @@ export const COA = [
   { code: '1500', name: 'Medical Equipment', type: 'Asset' },
   { code: '2000', name: 'Accounts Payable', type: 'Liability' },
   { code: '2100', name: 'Accrued Expenses', type: 'Liability' },
+  // Shared-catalog addition only (owner request): no existing rows remapped,
+  // no posting rule invented. Asset-typed per its nature (amounts owed to
+  // the business); flows through the existing generic ledger paths.
+  { code: '2200', name: 'Accrued Income', type: 'Asset' },
   { code: '3000', name: "Owner's Equity", type: 'Equity' },
   { code: '4000', name: 'Service Revenue — Diagnostics', type: 'Revenue' },
   { code: '4100', name: 'Pharmacy Sales', type: 'Revenue' },

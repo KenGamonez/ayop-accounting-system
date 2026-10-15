@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { BUSINESS_UNITS, COA, Txn, peso } from '../data/seed';
 import { countsAsPosted } from '../data/ops';
@@ -129,11 +129,11 @@ function presetRange(preset: GLPreset, year: number, sub: number, customFrom: st
  * account-selection path and lands on an explicit unconfigured state.
  */
 const CASH_IN_BANK_CHILDREN = [
-  { code: '1010-1', name: 'LBP - SPPDC' },
-  { code: '1010-2', name: 'LBP - JEM PHARMACY' },
-  { code: '1010-3', name: 'CIB - PSB' },
-  { code: '1010-4', name: 'CIB - SB' },
-  { code: '1010-5', name: 'CIB - RCBC' },
+  { code: '1010-1', name: 'LBP SPPDC' },
+  { code: '1010-2', name: 'LBP JEM Pharmacy' },
+  { code: '1010-3', name: 'CIB PSB' },
+  { code: '1010-4', name: 'CIB SB' },
+  { code: '1010-5', name: 'CIB RCBC' },
 ];
 
 /** UI-only helper: is this code one of the supplied (unmapped) children? */
@@ -141,11 +141,26 @@ export function isUiCashChild(code: string): boolean {
   return CASH_IN_BANK_CHILDREN.some(c => c.code === (code ?? '').trim());
 }
 
+export interface BankChoice { code: string; name: string }
+
+/**
+ * Exact ordered choices for the dedicated Cash in Bank dropdown: the parent
+ * `1010` total first, then its five UI-only subaccounts. Selecting any
+ * choice reuses the existing `pick` path (code before the em dash), so the
+ * parent keeps its real `accountLedger` filter and children land on the
+ * existing unconfigured state — no consolidation is invented.
+ */
+export function bankDropdownChoices(): BankChoice[] {
+  const parent = getAccount('1010');
+  return [{ code: '1010', name: parent ? parent.name : 'Cash in Bank' }, ...CASH_IN_BANK_CHILDREN];
+}
+
 function GeneralLedger() {
   const { txns } = useStore();
   const options = useMemo(() => accountOptions(), []);
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
+  const searchRef = useRef<HTMLInputElement>(null);
   // Hover/tap/keyboard state for the 1010 Cash in Bank flyout (the single
   // dedicated bank-subaccount control; other accounts use the search list).
   const [cashOpen, setCashOpen] = useState(false);
@@ -183,9 +198,13 @@ function GeneralLedger() {
     <div className="card statement">
       <h3>General Ledger — account first, then period</h3>
       <div className="form-grid no-print">
-        <div className="f gl-select-wrap">Account — search code or name
-          <div className="gl-searchrow">
-            <input value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
+        <div
+          className="f gl-select-wrap"
+          onMouseLeave={() => { if (document.activeElement !== searchRef.current) setOpen(false); }}
+          onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
+        >Account — search code or name
+          <div className="gl-searchrow" onMouseEnter={() => setOpen(true)}>
+            <input ref={searchRef} value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
             {input && <button type="button" className="btn ghost small" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">Clear</button>}
             <button type="button" className="btn ghost small" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={open ? 'Collapse account list' : 'Expand account list'}>{open ? '▾' : '▸'}</button>
           </div>
@@ -201,17 +220,17 @@ function GeneralLedger() {
               >
                 <div className={'gl-cashbtn gl-parentbtn' + (code === '1010' ? ' selected' : '')}>
                   <button type="button" className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)} aria-haspopup="menu" aria-expanded={cashOpen} aria-controls="gl-bank-submenu" title="Select 1010 Cash in Bank">
-                    <span className="gl-code">{parent1010.code}</span><span className="gl-name"><strong>{parent1010.name}</strong></span>
+                    <span className="gl-name"><strong>Cash in Bank</strong></span>
                   </button>
                   <span className="gl-subcount">5 subaccounts</span>
                   <button type="button" className="gl-expand" onClick={() => setCashOpen(v => !v)} aria-expanded={cashOpen} aria-controls="gl-bank-submenu" aria-label={(cashOpen ? 'Collapse' : 'Expand') + ' bank subaccounts'}>
                     {cashOpen ? '▾' : '▸'}
                   </button>
                 </div>
-                <div id="gl-bank-submenu" role="menu" aria-label="1010 Cash in Bank subaccounts" className={'gl-flyout' + (cashOpen ? ' open' : '')} aria-hidden={!cashOpen}>
-                  {CASH_IN_BANK_CHILDREN.map(c => (
-                    <button key={c.code} type="button" role="menuitem" tabIndex={cashOpen ? 0 : -1} className={'gl-opt gl-child' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title="UI-only option — no Chart of Accounts mapping">
-                      <span className="gl-code">{c.code}</span><span className="gl-name">{c.name}</span><span className="gl-type">UI-only</span>
+                <div id="gl-bank-submenu" role="menu" aria-label="Cash in Bank choices" className={'gl-flyout' + (cashOpen ? ' open' : '')} aria-hidden={!cashOpen}>
+                  {bankDropdownChoices().map(c => (
+                    <button key={c.code} type="button" role="menuitem" tabIndex={cashOpen ? 0 : -1} className={'gl-opt gl-child' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title={c.code === '1010' ? 'Parent/total account — uses the existing 1010 ledger filter' : 'UI-only option — no Chart of Accounts mapping'}>
+                      <span className="gl-code">{c.code}</span><span className="gl-name">{c.code === '1010' ? <strong>{c.name}</strong> : c.name}</span><span className="gl-type">{c.code === '1010' ? parent1010.type : 'UI-only'}</span>
                     </button>
                   ))}
                 </div>
