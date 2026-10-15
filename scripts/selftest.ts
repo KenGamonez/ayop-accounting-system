@@ -408,6 +408,22 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && txnSrc.includes('Counterparty') && txnSrc.includes('Particulars')
       && txnSrc.includes('bankSub: _notPersisted')
       && txnSrc.includes('backend') && txnSrc.includes('pending'));
+    // Streamlined entry form: Additional item details section gone (Item,
+    // category, prices, quantity inputs), Classification placed directly
+    // after Counterparty, submit button renamed — while removed values are
+    // reconstructed at submit so downstream data keeps working.
+    check('entry: streamlined form — no item-details section, Classification placed, button renamed (static)',
+      !txnSrc.includes('Additional item details') && !txnSrc.includes('f">Item category<select')
+      && !txnSrc.includes('f">Supplier Price<input') && !txnSrc.includes('f">Retail Price<input')
+      && !txnSrc.includes('f">Quantity<input') && !txnSrc.includes('f">Item<input')
+      && txnSrc.indexOf('f">Counterparty') < txnSrc.indexOf('f">Classification')
+      && txnSrc.indexOf('f">Classification') < txnSrc.indexOf('Cash in Bank Sub-account')
+      && txnSrc.includes('>Submit for Review</button>')
+      && !txnSrc.includes('Submit for Accountant Review')
+      && !txnSrc.includes('submit for Accountant Review')
+      && !txnSrc.includes('go to Accountant Review')
+      && txnSrc.includes('const item = form.remarks.trim()')
+      && txnSrc.includes("category: 'Medical Supplies'"));
   }
   // Shared catalog: 2200 Accrued Income resolves everywhere the shared COA
   // is used (GL lookup/options, Disbursement + Journal validation), with all
