@@ -43,7 +43,8 @@ export default function Transactions() {
           onPrint={() => window.print()}
         />
       )}
-      <div className={`card${show ? ' no-print' : ''}`}>
+      {!show && (
+        <div className="card">
         <div className="filters">
           <select value={fUnit} onChange={e => setFUnit(e.target.value)}><option>All</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
           <select value={fClass} onChange={e => setFClass(e.target.value)}><option>All</option>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select>
@@ -69,7 +70,8 @@ export default function Transactions() {
             </tr>
           ))}</tbody>
         </table></div>
-      </div>
+        </div>
+      )}
     </>
   );
 }

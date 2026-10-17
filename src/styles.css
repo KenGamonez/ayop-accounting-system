@@ -221,13 +221,11 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 .hamb { display: none; }
 
 /* new transaction entry form (front-end only) */
-.txn-new-entry { display: block; margin-bottom: 14px; background: #e9f5da; border: 1px solid #cfe4b4; border-radius: var(--radius); box-shadow: var(--shadow); padding: 18px; }
-.txn-header h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: .02em; color: var(--navy); text-align: center; }
+.txn-new-entry { display: block; margin-bottom: 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+.txn-header h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
 .txn-form { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 0; }
-.txn-section { margin-bottom: 18px; }
+.txn-section { margin-bottom: 16px; }
 .section-title { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
-.form-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
-.form-row .full { grid-column: 1 / -1; }
 
 .entries-grid { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
 .entries-header, .entry-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 130px 44px; align-items: center; }
@@ -237,10 +235,10 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 .entry-row .entry-col { padding: 6px 8px; }
 .entry-col-amount { text-align: right; }
 .entries-header .entry-col-amount { text-align: center; }
-.entry-row-total { background: #dcefca; font-weight: 700; }
+.entry-row-total { background: #f1f3f9; font-weight: 700; }
 .entry-row-total .entry-col-title { text-transform: uppercase; letter-spacing: .04em; font-size: 12px; }
 .entry-row-total .entry-col-amount { color: var(--navy); }
-.account-select, .amount-input { width: 100%; font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+.account-select, .amount-input { width: 100%; }
 .amount-input { text-align: right; font-variant-numeric: tabular-nums; }
 .entry-col-action { display: flex; justify-content: center; }
 .btn-remove { min-width: 30px; padding: 4px 8px; }
@@ -254,12 +252,11 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 .imbalance-warning { margin-top: 10px; background: var(--red-bg); border: 1px solid #f3c0ba; color: var(--red); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; }
 .balanced-indicator { margin-top: 10px; background: var(--green-bg); border: 1px solid #bfe3cd; color: var(--green); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; }
 
-.signatories-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-.signatory-block { display: flex; flex-direction: column; gap: 6px; }
-.sig-input { width: 100%; font: inherit; padding: 10px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
-.sig-caption { font-size: 12px; color: var(--ink); }
+.signatories-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.signatory-block { display: flex; flex-direction: column; gap: 4px; }
+.sig-input { width: 100%; }
+.sig-caption { font-size: 12.5px; color: var(--navy); font-weight: 600; }
 .signatory-audited { margin: 14px 0 0 auto; width: 33%; }
-.signatory-audited .sig-caption { text-align: center; }
 .txn-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .print-only { display: none; }

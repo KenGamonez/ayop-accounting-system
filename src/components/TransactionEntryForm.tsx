@@ -121,7 +121,7 @@ export default function TransactionEntryForm({
         {/* Section A: Transaction Details */}
         <section className="txn-section">
           <h3 className="section-title">A. Transaction Details</h3>
-          <div className="form-row">
+          <div className="form-grid">
             <label className="f">
               Date
               <input
@@ -157,7 +157,7 @@ export default function TransactionEntryForm({
         {/* Section B: Particulars */}
         <section className="txn-section">
           <h3 className="section-title">B. Particulars</h3>
-          <div className="form-row">
+          <div className="form-grid">
             <label className="f full">
               Particulars
               <textarea
