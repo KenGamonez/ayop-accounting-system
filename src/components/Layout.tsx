@@ -89,6 +89,10 @@ export default function Layout() {
   const loc = useLocation();
   const path = loc.pathname;
   const close = () => setOpen(false);
+  // The demo/synthetic notices below are shared shell chrome shown on every
+  // screen. On the New Transaction screen they merely duplicate the entry
+  // guidance, so they are suppressed there only — other screens are unchanged.
+  const hideSharedDemoText = path === '/admin/transaction';
   // Centralized demo route guard: Warehouse accounts cannot deep-link into
   // accountant-only screens (query strings can't bypass — the path decides).
   if (user && !canVisit(user.role, path)) {
@@ -105,7 +109,7 @@ export default function Layout() {
         <nav className="nav">
           {items.map(n => <Row key={n.to + n.label} item={n} path={path} onNav={close} />)}
         </nav>
-        <div className="side-foot">{mode === 'live' ? <>Live Supabase backend · txns, approvals, POs, inventory.<br />Journal drafts stay demo-local.</> : <>Frontend demo · synthetic data only.<br />No backend connected.</>}</div>
+        {!hideSharedDemoText && <div className="side-foot">{mode === 'live' ? <>Live Supabase backend · txns, approvals, POs, inventory.<br />Journal drafts stay demo-local.</> : <>Frontend demo · synthetic data only.<br />No backend connected.</>}</div>}
       </aside>
       <div className="main">
         <div className="topbar">
@@ -132,7 +136,7 @@ export default function Layout() {
             <button className="btn ghost small" onClick={() => { if (mode === 'live') { void liveLogout().then(() => nav('/admin/login')); } else { logout(); nav('/admin/login'); } }}>Log out</button>
           </div>
         </div>
-        {mode === 'demo' && (
+        {mode === 'demo' && !hideSharedDemoText && (
         <div className="demo-banner">
           Demonstration environment — all figures are <strong>synthetic</strong> and require accounting validation before production use. Pending transactions are not posted.
         </div>

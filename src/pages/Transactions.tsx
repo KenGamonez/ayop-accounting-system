@@ -34,7 +34,7 @@ export default function Transactions() {
   return (
     <>
       <div className={show ? 'no-print' : undefined}>
-        <PageHead title="Transaction" sub="Transaction Entry — first step of the staff workflow. New entries go for review; they are not posted." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
+        <PageHead title="Transaction" actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
       </div>
       {show && (
         <TransactionEntryForm
