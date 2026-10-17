@@ -434,20 +434,26 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && txnSrc.includes('<TransactionEntryForm'));
   }
   // New Entry print support (static): a Print action opens the browser
-  // print dialog without submitting anything, and a screen-hidden print
-  // summary is the only entry content shown on paper while the interactive
-  // form hides via print CSS.
+  // print dialog without submitting anything, and a screen-hidden voucher
+  // (title by transaction type, control number) is the only entry content
+  // shown on paper while the interactive form hides via print CSS.
   {
     const compSrc = readFileSync('src/components/TransactionEntryForm.tsx', 'utf8');
     const printCss = readFileSync('src/styles.css', 'utf8');
-    check('entry: Print action with screen-hidden printout, form hidden on paper (static)',
+    check('entry: Print action with screen-hidden voucher, form hidden on paper (static)',
       compSrc.includes('Print Transaction') && compSrc.includes('onPrint')
-      && compSrc.includes('print-only') && compSrc.includes('print-table')
-      && compSrc.includes('signatories-print') && compSrc.includes('sig-name')
+      && compSrc.includes('print-only') && compSrc.includes('voucher-table')
+      && compSrc.includes('voucher-signatures') && compSrc.includes('voucher-sig-name')
+      && compSrc.includes('Control No.') && compSrc.includes('DISBURSEMENT VOUCHER')
+      && compSrc.includes('JOURNAL VOUCHER')
       && !compSrc.includes('.filter(e => e.accountTitle')
       && printCss.includes('.print-only { display: none; }')
       && printCss.includes('.txn-new-entry .txn-header, .txn-new-entry .txn-form { display: none !important; }')
-      && printCss.includes('.sig-name'));
+      && printCss.includes('.voucher-sig-name'));
+    // Edit 1 (static): Debit now precedes Credit in the entries grid and voucher.
+    check('entry: Debit precedes Credit in the grid and voucher (static)',
+      compSrc.indexOf('>Debit<') > -1 && compSrc.indexOf('>Credit<') > -1
+      && compSrc.indexOf('>Debit<') < compSrc.indexOf('>Credit<'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their
   // counts/amounts are gone, while the entry form, filters, search, status

@@ -233,7 +233,11 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 
 /* new transaction entry form (front-end only) */
 .txn-new-entry { display: block; margin-bottom: 14px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
-.txn-header h2 { margin: 0 0 12px; font-size: 16px; color: var(--navy); }
+.txn-header { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+.txn-header h2 { margin: 0; font-size: 16px; color: var(--navy); }
+.txn-control { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; text-align: right; }
+.txn-control-label { font-size: 10.5px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); font-weight: 600; }
+.txn-control-value { font-size: 12.5px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
 .txn-form { background: transparent; border: none; border-radius: 0; box-shadow: none; padding: 0; }
 .txn-section { margin-bottom: 16px; }
 .section-title { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
@@ -305,21 +309,37 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
   .txn-new-entry { background: #fff; border: none; box-shadow: none; padding: 0; }
   .txn-new-entry .txn-header, .txn-new-entry .txn-form { display: none !important; }
   .txn-new-entry .print-only { display: block; }
-  .print-header { margin-bottom: 10px; }
-  .print-header h1 { margin: 2px 0; font-size: 19px; color: #000; }
-  .print-body { font-size: 12px; }
-  .print-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
-  .print-table th, .print-table td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
-  .print-table thead th { background: #eee; }
-  .print-table .total-row td { background: #f1f3f9; font-weight: 700; }
-  .print-imbalance { border: 1px solid #999; padding: 6px 8px; margin-bottom: 10px; }
-  .signatories-print { margin-top: 34px; }
-  .sig-row { display: flex; gap: 24px; margin-bottom: 26px; }
-  .sig-field { flex: 1; }
-  .sig-name { min-height: 15px; font-size: 12px; text-align: center; }
-  .sig-line { border-bottom: 1px solid #000; height: 1px; margin-bottom: 4px; }
-  .sig-label { font-size: 11px; text-align: center; }
-  .sig-field-audited { max-width: 33%; }
+  /* New Transaction printable voucher */
+  .voucher { font-size: 12px; color: #111; }
+  .voucher-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; padding-bottom: 10px; border-bottom: 2px solid #14234a; }
+  .voucher-company { font-size: 15px; font-weight: 700; letter-spacing: .08em; color: #14234a; }
+  .voucher-system { font-size: 10.5px; letter-spacing: .04em; color: #5b6478; margin-top: 1px; }
+  .voucher-title { font-size: 17px; font-weight: 700; letter-spacing: .05em; color: #14234a; margin-top: 8px; }
+  .voucher-control { text-align: right; }
+  .voucher-control-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .1em; color: #5b6478; font-weight: 700; }
+  .voucher-control-value { font-size: 12.5px; font-weight: 700; color: #14234a; font-variant-numeric: tabular-nums; margin-top: 2px; }
+  .voucher-details { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px 22px; margin: 16px 0 4px; }
+  .voucher-field { display: flex; flex-direction: column; gap: 2px; }
+  .voucher-field-full { grid-column: 1 / -1; }
+  .voucher-field-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #5b6478; font-weight: 700; }
+  .voucher-field-value { font-size: 12px; color: #111; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .voucher-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
+  .voucher-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 8px 10px; border: 1px solid #b9c0d0; background: #eef1f6; color: #14234a; }
+  .voucher-table td { font-size: 12px; padding: 8px 10px; border: 1px solid #cdd3e0; vertical-align: top; overflow-wrap: anywhere; }
+  .voucher-table th.num, .voucher-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .voucher-total-row td { border-top: 2px solid #14234a; background: #f4f6fa; font-weight: 700; color: #14234a; }
+  .voucher-status { font-size: 11px; margin-top: 8px; }
+  .voucher-balanced { color: #3f4a5f; }
+  .voucher-imbalance { border: 1px solid #b91c1c; color: #b91c1c; font-weight: 700; padding: 6px 10px; }
+  .voucher-signatures { display: flex; gap: 30px; margin-top: 44px; }
+  .voucher-signatures-audited { justify-content: flex-end; margin-top: 30px; }
+  .voucher-sig { flex: 1; min-width: 0; text-align: center; }
+  .voucher-signatures-audited .voucher-sig { flex: 0 1 34%; }
+  .voucher-sig-line { height: 30px; border-bottom: 1px solid #14234a; margin-bottom: 6px; }
+  .voucher-sig-role { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #14234a; font-weight: 700; }
+  .voucher-sig-name { font-size: 11px; color: #111; min-height: 14px; margin-top: 2px; overflow-wrap: anywhere; }
+  .voucher-foot { margin-top: 26px; padding-top: 8px; border-top: 1px solid #cdd3e0; font-size: 9.5px; color: #5b6478; }
+  .voucher-head, .voucher-details, .voucher-signatures { break-inside: avoid; }
 }
 
 @media (max-width: 980px) {
