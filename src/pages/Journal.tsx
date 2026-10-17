@@ -117,7 +117,7 @@ export default function Journal() {
             transactionType="Journal"
             particulars={viewEntry.particulars}
             lines={viewLines}
-            signatories={{ preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
+            signatories={viewEntry.signatories ?? { preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
             recordNo={viewEntry.ref}
             status={viewEntry.status}
             note={viewEntry.queuedTxn ? `Queued as ${viewEntry.queuedTxn} — awaiting review.` : undefined}

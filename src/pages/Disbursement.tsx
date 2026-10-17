@@ -113,7 +113,7 @@ export default function Disbursement() {
             transactionType={viewTxn.kind}
             particulars={viewTxn.item}
             lines={viewLines}
-            signatories={{ preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
+            signatories={viewTxn.signatories ?? { preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
             recordNo={viewTxn.id}
             status={viewTxn.status}
           />

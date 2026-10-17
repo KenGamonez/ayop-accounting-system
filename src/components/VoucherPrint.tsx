@@ -49,11 +49,12 @@ function accountLabel(line: JournalLine): string {
 }
 
 /**
- * The printable voucher. It carries no letterhead — it begins directly with the
- * transaction details — and mirrors the fields the saved-record View screens
- * display (type, control no., particulars, date, business unit, record no.,
- * status, the debit/credit lines and totals). Screen-hidden via `.print-only`;
- * the `.voucher*` print CSS lays it out. It renders only the data handed to it.
+ * The printable voucher. It opens with the centered company letterhead (printed
+ * exactly once) and then mirrors the saved-record View fields (type, control
+ * no., particulars, date, business unit, record no., status, the debit/credit
+ * lines and totals), a balance line for both types, and the four signatories.
+ * Screen-hidden via `.print-only`; the `.voucher*` print CSS lays it out. It
+ * renders only the data handed to it.
  */
 export default function VoucherPrint({
   controlNo,
@@ -67,13 +68,18 @@ export default function VoucherPrint({
   status,
   note,
 }: VoucherPrintProps) {
-  const disbursement = isDisbursementType(transactionType);
   const totalDebit = lines.reduce((s, l) => s + (l.debit > 0 ? l.debit : 0), 0);
   const totalCredit = lines.reduce((s, l) => s + (l.credit > 0 ? l.credit : 0), 0);
   const balanced = totalDebit === totalCredit;
 
   return (
     <div className="voucher">
+      <header className="voucher-header">
+        <div className="voucher-system">JEMS accounting System</div>
+        <div className="voucher-company">AYOP GROUP OF COMPANIES</div>
+        <div className="voucher-address">JEM Bldg. , Medina St. Carmen-Annex, Ozamiz City, Misamis Occidental</div>
+      </header>
+
       <section className="voucher-top">
         <div className="voucher-field">
           <span className="voucher-field-label">Transaction Type</span>
@@ -136,64 +142,42 @@ export default function VoucherPrint({
         </tbody>
       </table>
 
-      {!disbursement && (balanced ? (
+      {balanced ? (
         <div className="voucher-status voucher-balanced">
-          Total Debit: {peso(totalDebit)} equals Total Credit: {peso(totalCredit)}.
+          Balanced — Total Debit: {peso(totalDebit)} equals Total Credit: {peso(totalCredit)}.
         </div>
       ) : (
         <div className="voucher-status voucher-imbalance">
           Imbalance — Total Debit {peso(totalDebit)} does not equal Total Credit {peso(totalCredit)} (difference {peso(Math.abs(totalDebit - totalCredit))}).
         </div>
-      ))}
+      )}
 
       {note && <div className="voucher-note">{note}</div>}
 
-      {disbursement ? (
-        <section className="voucher-signatures">
-          <div className="voucher-sig">
-            <div className="voucher-sig-line"></div>
-            <div className="voucher-sig-role">Prepared By</div>
-            <div className="voucher-sig-name">{signatories.preparedBy}</div>
-          </div>
-          <div className="voucher-sig">
-            <div className="voucher-sig-line"></div>
-            <div className="voucher-sig-role">Approved By</div>
-            <div className="voucher-sig-name">{signatories.approvedBy}</div>
-          </div>
-          <div className="voucher-sig">
-            <div className="voucher-sig-line"></div>
-            <div className="voucher-sig-role">Paid / Received By</div>
-            <div className="voucher-sig-name"></div>
-          </div>
-        </section>
-      ) : (
-        <>
-          <section className="voucher-signatures">
-            <div className="voucher-sig">
-              <div className="voucher-sig-line"></div>
-              <div className="voucher-sig-role">Prepared &amp; Checked By</div>
-              <div className="voucher-sig-name">{signatories.preparedBy}</div>
-            </div>
-            <div className="voucher-sig">
-              <div className="voucher-sig-line"></div>
-              <div className="voucher-sig-role">Posted By</div>
-              <div className="voucher-sig-name">{signatories.postedBy}</div>
-            </div>
-            <div className="voucher-sig">
-              <div className="voucher-sig-line"></div>
-              <div className="voucher-sig-role">Approved By</div>
-              <div className="voucher-sig-name">{signatories.approvedBy}</div>
-            </div>
-          </section>
-          <section className="voucher-signatures voucher-signatures-audited">
-            <div className="voucher-sig">
-              <div className="voucher-sig-line"></div>
-              <div className="voucher-sig-role">Audited By</div>
-              <div className="voucher-sig-name">{signatories.auditedBy}</div>
-            </div>
-          </section>
-        </>
-      )}
+      <section className="voucher-signatures">
+        <div className="voucher-sig">
+          <div className="voucher-sig-line"></div>
+          <div className="voucher-sig-role">Prepared &amp; Checked By</div>
+          <div className="voucher-sig-name">{signatories.preparedBy}</div>
+        </div>
+        <div className="voucher-sig">
+          <div className="voucher-sig-line"></div>
+          <div className="voucher-sig-role">Posted By</div>
+          <div className="voucher-sig-name">{signatories.postedBy}</div>
+        </div>
+        <div className="voucher-sig">
+          <div className="voucher-sig-line"></div>
+          <div className="voucher-sig-role">Approved By</div>
+          <div className="voucher-sig-name">{signatories.approvedBy}</div>
+        </div>
+      </section>
+      <section className="voucher-signatures voucher-signatures-audited">
+        <div className="voucher-sig">
+          <div className="voucher-sig-line"></div>
+          <div className="voucher-sig-role">Audited By</div>
+          <div className="voucher-sig-name">{signatories.auditedBy}</div>
+        </div>
+      </section>
     </div>
   );
 }

@@ -464,14 +464,19 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     check('entry: Debit precedes Credit in the grid and voucher (static)',
       compSrc.indexOf('>Debit<') > -1 && compSrc.indexOf('>Credit<') > -1
       && compSrc.indexOf('>Debit<') < compSrc.indexOf('>Credit<'));
-    // Header stripped: the voucher carries no letterhead (no company name,
-    // system brand, address, or printed-by line) and begins directly with the
-    // transaction details — Transaction Type | Control No., then Particulars.
-    check('voucher: letterhead stripped; leads with saved transaction details (static)',
-      !voucherSrc.includes('AYOP GROUP OF COMPANIES')
-      && !voucherSrc.includes('JEM51 Accounting System')
-      && !voucherSrc.includes('JEM Bldg., Medina St.')
+    // Required centered letterhead with exact spelling, printed exactly once,
+    // followed by the transaction details; the four signatory labels appear for
+    // both types and the balance line is no longer disbursement-only.
+    check('voucher: centered letterhead once + four signatories + balance both types (static)',
+      (voucherSrc.match(/AYOP GROUP OF COMPANIES/g) ?? []).length === 1
+      && (voucherSrc.match(/JEMS accounting System/g) ?? []).length === 1
+      && voucherSrc.includes('JEM Bldg. , Medina St. Carmen-Annex, Ozamiz City, Misamis Occidental')
+      && voucherSrc.includes('voucher-header')
       && !voucherSrc.includes('Printed by:')
+      && !voucherSrc.includes('Paid / Received By')
+      && !voucherSrc.includes('!disbursement')
+      && voucherSrc.includes('Prepared &amp; Checked By') && voucherSrc.includes('Posted By')
+      && voucherSrc.includes('Approved By') && voucherSrc.includes('Audited By')
       && voucherSrc.includes('voucher-top')
       && voucherSrc.indexOf('Transaction Type') < voucherSrc.indexOf('Control No.')
       && voucherSrc.indexOf('Control No.') < voucherSrc.indexOf('Particulars')
@@ -613,6 +618,20 @@ check('new entry save keeps the control number and every account line (both type
   && neJrnlFull.controlNo === 'JEM51-TXN-20261014-002' && (neJrnlFull.lines ?? []).length === 2
   && disbursementFromNewEntry(neBase, 'Jeann').controlNo === undefined,
   { dis: neDisFull.controlNo, jrnl: neJrnlFull.controlNo });
+const sig = { preparedBy: 'Preparer', postedBy: 'Poster', approvedBy: 'Approver', auditedBy: 'Auditor' };
+const neDisSig = disbursementFromNewEntry({ ...neBase, signatories: sig }, 'Jeann', 'C-SIG');
+const neJrnlSig = journalFromNewEntry({ ...neBase, transactionType: 'Journal', signatories: sig }, 'JV-SIG', 'C-SIG');
+check('new entry save preserves all four signatories into both records',
+  neDisSig.signatories?.preparedBy === 'Preparer' && neDisSig.signatories?.postedBy === 'Poster'
+  && neDisSig.signatories?.approvedBy === 'Approver' && neDisSig.signatories?.auditedBy === 'Auditor'
+  && neJrnlSig.signatories?.preparedBy === 'Preparer' && neJrnlSig.signatories?.auditedBy === 'Auditor'
+  && disbursementFromNewEntry(neBase, 'Jeann').signatories === undefined,
+  { dis: neDisSig.signatories, jrnl: neJrnlSig.signatories });
+check('saved-entry views pass the stored signatories (never hardcoded blanks alone) to the voucher (static)',
+  ['src/pages/Disbursement.tsx', 'src/pages/Journal.tsx'].every(f => {
+    const s = readFileSync(f, 'utf8');
+    return s.includes('.signatories ??') && s.includes('preparedBy');
+  }));
 const disWithLines = disbursementEntryLines({
   accountCode: '5000', accountName: 'Medical Supplies Expense', amount: 7700,
   lines: [

@@ -45,6 +45,14 @@ export const ITEM_CATEGORIES = ['Medical Supplies', 'Medical Equipment', 'Office
 
 export const INVENTORY_TYPES = ['Laboratory', 'Pharmacy', 'Dialysis', 'Admin'] as const;
 
+/** The four signatory names captured on a New Transaction entry. */
+export interface Signatories {
+  preparedBy: string;
+  postedBy: string;
+  approvedBy: string;
+  auditedBy: string;
+}
+
 export interface Txn {
   id: string;
   date: string;
@@ -71,6 +79,8 @@ export interface Txn {
   lines?: JournalLine[];
   /** Display-only control reference captured at entry. */
   controlNo?: string;
+  /** Signatory names captured at entry (frontend-only; not sent to the backend). */
+  signatories?: Signatories;
 }
 
 export interface InventoryItem {
@@ -137,6 +147,8 @@ export interface JournalEntry {
   lines?: JournalLine[];
   /** Display-only control reference captured at entry. */
   controlNo?: string;
+  /** Signatory names captured at entry (frontend-only; kept so the record reprints). */
+  signatories?: Signatories;
 }
 
 export interface AuditEvent {

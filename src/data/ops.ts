@@ -2,7 +2,7 @@
 // receipt math, status derivation, and inventory-type defaults. Covered by
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
-import type { JournalEntry, JournalLine, PurchaseOrder, Txn, TxnStatus } from './seed';
+import type { JournalEntry, JournalLine, PurchaseOrder, Signatories, Txn, TxnStatus } from './seed';
 import { BUSINESS_UNITS, COA, STAFF, TRANSACTION_KINDS } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
@@ -279,6 +279,9 @@ export interface NewEntryInput {
   transactionType: string;
   particulars: string;
   entries: NewEntryLine[];
+  /** Signatory names captured at entry; carried into the saved record so the
+   *  saved View and reprint keep them (frontend-only, like lines/controlNo). */
+  signatories?: Signatories;
 }
 
 /** Same money rule the entry form uses: blank/invalid -> 0, never negative. */
@@ -381,6 +384,7 @@ export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string, co
     remarks: 'New entry saved from Transaction — queued for accountant review, not posted',
     lines: newEntryLines(d),
     controlNo,
+    signatories: d.signatories,
   };
 }
 
@@ -407,6 +411,7 @@ export function journalFromNewEntry(d: NewEntryInput, ref: string, controlNo?: s
     sourceTxn: 'NEW ENTRY',
     lines,
     controlNo,
+    signatories: d.signatories,
   };
 }
 
