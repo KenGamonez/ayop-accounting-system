@@ -240,6 +240,12 @@ export default function TransactionEntryForm({
                 </div>
               </div>
             ))}
+            <div className="entry-row entry-row-total">
+              <div className="entry-col entry-col-title">Total</div>
+              <div className="entry-col entry-col-amount">{peso(totals.totalCredit)}</div>
+              <div className="entry-col entry-col-amount">{peso(totals.totalDebit)}</div>
+              <div className="entry-col entry-col-action"></div>
+            </div>
           </div>
           <div className="entries-actions">
             <button type="button" className="btn ghost small" onClick={addEntry}>
@@ -278,50 +284,50 @@ export default function TransactionEntryForm({
         <section className="txn-section">
           <h3 className="section-title">E. Signatories</h3>
           <div className="signatories-grid">
-            <div className="signatory-group">
-              <label className="f">
-                Prepared & Checked By
-                <input
-                  type="text"
-                  value={formData.signatories.preparedBy}
-                  onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, preparedBy: e.target.value } })}
-                  placeholder="Name / Signature"
-                />
-              </label>
+            <div className="signatory-block">
+              <input
+                type="text"
+                className="sig-input"
+                value={formData.signatories.preparedBy}
+                onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, preparedBy: e.target.value } })}
+                placeholder="Name / Signature"
+                aria-label="Prepared and checked by"
+              />
+              <div className="sig-caption">Prepared & Checked By</div>
             </div>
-            <div className="signatory-group">
-              <label className="f">
-                Posted By
-                <input
-                  type="text"
-                  value={formData.signatories.postedBy}
-                  onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, postedBy: e.target.value } })}
-                  placeholder="Name / Signature"
-                />
-              </label>
+            <div className="signatory-block">
+              <input
+                type="text"
+                className="sig-input"
+                value={formData.signatories.postedBy}
+                onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, postedBy: e.target.value } })}
+                placeholder="Name / Signature"
+                aria-label="Posted by"
+              />
+              <div className="sig-caption">Posted By</div>
             </div>
-            <div className="signatory-group">
-              <label className="f">
-                Approved By
-                <input
-                  type="text"
-                  value={formData.signatories.approvedBy}
-                  onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, approvedBy: e.target.value } })}
-                  placeholder="Name / Signature"
-                />
-              </label>
+            <div className="signatory-block">
+              <input
+                type="text"
+                className="sig-input"
+                value={formData.signatories.approvedBy}
+                onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, approvedBy: e.target.value } })}
+                placeholder="Name / Signature"
+                aria-label="Approved by"
+              />
+              <div className="sig-caption">Approved By</div>
             </div>
-            <div className="signatory-group signatory-audited">
-              <label className="f">
-                Audited By
-                <input
-                  type="text"
-                  value={formData.signatories.auditedBy}
-                  onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, auditedBy: e.target.value } })}
-                  placeholder="Name / Signature"
-                />
-              </label>
-            </div>
+          </div>
+          <div className="signatory-block signatory-audited">
+            <div className="sig-caption">Audited By:</div>
+            <input
+              type="text"
+              className="sig-input"
+              value={formData.signatories.auditedBy}
+              onChange={e => setFormData({ ...formData, signatories: { ...formData.signatories, auditedBy: e.target.value } })}
+              placeholder="Name / Signature"
+              aria-label="Audited by"
+            />
           </div>
         </section>
 
