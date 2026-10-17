@@ -339,26 +339,27 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   && getAccount('1010-1') === null && getAccount('1010')?.name === 'Cash in Bank'
   && accountLedger([], '1010-1', { unit: 'All units', from: '', to: '' }) === null);
 {
-  // Static guard for the hover-flyout fix: the previous click-only expander
-  // (no pointer handlers, children gated on expand state) must stay gone,
-  // and the hover/tap/keyboard wiring must be present in source + styles.
+  // Static guard for the reworked account control: the five UI-only bank
+  // subaccounts are nested inside the single searchable account dropdown —
+  // there is no separate, permanently visible bank card, no click-only
+  // expander, and no flyout. Real COA codes (incl. 1000) stay searchable.
   const glSrc = readFileSync('src/pages/Accounting.tsx', 'utf8');
   const css = readFileSync('src/styles.css', 'utf8');
   const childCodes = ['1010-1', '1010-2', '1010-3', '1010-4', '1010-5'];
-  check('gl: single bank control — no boxed Cash on Hand, 1000 still searchable, 5 banks kept (static)',
+  check('gl: single account control — banks nested in the dropdown, no boxed bank card (static)',
     childCodes.every(c => glSrc.includes(`'${c}'`))
     && !glSrc.includes("'1010-6'") && !glSrc.includes("'1010-7'")
-    && glSrc.includes('onMouseEnter') && glSrc.includes('onMouseLeave')
-    && glSrc.includes("e.key === 'Escape'") && glSrc.includes('aria-haspopup="menu"')
-    && glSrc.includes('gl-bank-submenu') && glSrc.includes('gl-hoverwrap') && glSrc.includes('gl-flyout')
-    && glSrc.includes('gl-bankpick') && !glSrc.includes('gl-cashpair') && !glSrc.includes('cash1000')
+    && glSrc.includes("e.key === 'Escape'") && glSrc.includes('bankDropdownChoices')
+    && glSrc.includes('gl-child') && glSrc.includes('filtered.map')
+    && !glSrc.includes('gl-bankpick') && !glSrc.includes('gl-hoverwrap') && !glSrc.includes('gl-flyout')
+    && !glSrc.includes('gl-cashbtn') && !glSrc.includes('gl-parentbtn') && !glSrc.includes('gl-expand')
+    && !glSrc.includes('gl-cashpair') && !glSrc.includes('cash1000')
     && !glSrc.includes('expanded1010') && !glSrc.includes('showChildren')
     && !glSrc.includes('Choose a bank subaccount.') && !glSrc.includes('tap ▸ on touch')
-    && glSrc.includes('5 subaccounts')
     && getAccount('1000')?.name === 'Cash on Hand'
-    && glSrc.includes('filtered.map')
-    && css.includes('.gl-flyout') && css.includes('.gl-hoverwrap') && css.includes('.gl-bankpick')
-    && !css.includes('.gl-cashpair') && css.includes('z-index: 60'),
+    && css.includes('.gl-doc') && css.includes('.gl-acct-title') && css.includes('z-index: 60')
+    && !css.includes('.gl-flyout') && !css.includes('.gl-hoverwrap') && !css.includes('.gl-bankpick')
+    && !css.includes('.gl-cashpair'),
     { hover: glSrc.includes('onMouseEnter') });
   // Parent 1010 stays selectable as the total account through the existing
   // filter: a posted txn coded 1010 appears in its ledger. No consolidation
@@ -376,16 +377,15 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   const bankChoices = bankDropdownChoices().map(c => `${c.code} — ${c.name}`);
   check('gl: bank dropdown holds exactly the six ordered choices (parent first)',
     bankChoices.join('|') === '1010 — Cash in Bank|1010-1 — LBP SPPDC|1010-2 — LBP JEM Pharmacy|1010-3 — CIB PSB|1010-4 — CIB SB|1010-5 — CIB RCBC', bankChoices);
-  // Whole-pill hover on both selectors (static): the bank pill opens from
-  // anywhere on its wrapper (not just the chevron) and stays open across the
-  // gap-free trigger/menu region; the main search row opens its list on
-  // hover and only auto-closes on leaving the combined region while idle.
-  check('gl: whole-pill hover opens both dropdowns, gap-free region close (static)',
+  // The single account control opens its dropdown from anywhere on the search
+  // row and only auto-closes when the pointer leaves the combined region while
+  // the field is idle — there is no second control and no gap that drops it.
+  check('gl: account control hover opens the single dropdown, idle region close (static)',
     glSrc.includes('className="gl-searchrow" onMouseEnter={() => setOpen(true)}')
     && glSrc.includes('onMouseLeave={() => { if (document.activeElement !== searchRef.current) setOpen(false); }}')
-    && /className="gl-hoverwrap"\s+onMouseEnter=\{\(\) => setCashOpen\(true\)\}/.test(glSrc)
-    && css.includes('top: calc(100% - 1px)')
-    && glSrc.includes('<strong>Cash in Bank</strong>'));
+    && glSrc.includes('className="gl-account-control"')
+    && css.includes('.gl-account-control .gl-list { position: absolute;')
+    && !glSrc.includes('setCashOpen'));
   // Entry-form sub-account rule (pure): required under parent 1010, cleared
   // everywhere else so stale values can never remain or be submitted.
   check('entry: bank sub-account required for 1010, cleared otherwise',

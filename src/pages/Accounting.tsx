@@ -190,9 +190,6 @@ function GeneralLedger() {
   const [input, setInput] = useState('');
   const [open, setOpen] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  // Hover/tap/keyboard state for the 1010 Cash in Bank flyout (the single
-  // dedicated bank-subaccount control; other accounts use the search list).
-  const [cashOpen, setCashOpen] = useState(false);
   const [unit, setUnit] = useState('All units');
   const [preset, setPreset] = useState<GLPreset>('Monthly');
   const [year, setYear] = useState(2026);
@@ -220,81 +217,64 @@ function GeneralLedger() {
   const matches = (c: string, n: string) => !q || c.toLowerCase().includes(q) || n.toLowerCase().includes(q) || `${c} — ${n}`.toLowerCase().includes(q);
   const filtered = options.filter(o => matches(o.code, o.name));
   const filteredChildren = CASH_IN_BANK_CHILDREN.filter(c => matches(c.code, c.name));
-  const parent1010 = options.find(o => o.code === '1010');
-  const pick = (c: string, n: string) => { setInput(`${c} — ${n}`); setOpen(false); setCashOpen(false); };
+  // The five UI-only bank subaccounts live inside the single account dropdown,
+  // nested under 1010, so they appear only while choosing an account — there
+  // is no separate, permanently visible bank card.
+  const bankChildren = useMemo(() => bankDropdownChoices().slice(1), []);
+  const pick = (c: string, n: string) => { setInput(`${c} — ${n}`); setOpen(false); };
 
   return (
-    <div className="card statement gl-report">
-      <h2 className="gl-report-title">General Ledger</h2>
-      <div className="form-grid gl-filters no-print">
-        <label className="f">Business Unit
+    <div className="gl-doc">
+      <h2 className="gl-doc-title">General Ledger</h2>
+
+      <div className="gl-filters no-print">
+        <label className="gl-filter"><span className="gl-filter-label">Business Unit</span>
           <select value={unit} onChange={e => setUnit(e.target.value)}><option>All units</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
         </label>
-        <label className="f">Periodic
+        <label className="gl-filter"><span className="gl-filter-label">Periodic</span>
           <select value={preset} onChange={e => setPreset(e.target.value as GLPreset)}>
             <option>Monthly</option><option>Quarterly</option><option>Six months</option><option>Yearly</option><option>Custom</option>
           </select>
         </label>
-        <label className="f">Year
+        <label className="gl-filter"><span className="gl-filter-label">Year</span>
           <select value={year} onChange={e => setYear(Number(e.target.value))}>{GL_YEARS.map(y => <option key={y}>{y}</option>)}</select>
         </label>
-        {subLabel && <label className="f">{subLabel}
+        {subLabel && <label className="gl-filter"><span className="gl-filter-label">{subLabel}</span>
           <select value={sub} onChange={e => setSub(Number(e.target.value))}>
             {preset === 'Monthly' && GL_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
             {preset === 'Quarterly' && [1, 2, 3, 4].map(q => <option key={q} value={q}>Q{q}</option>)}
             {preset === 'Six months' && [<option key={1} value={1}>January – June</option>, <option key={2} value={2}>July – December</option>]}
           </select>
         </label>}
-        {preset === 'Custom' && <label className="f">From<input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>}
-        {preset === 'Custom' && <label className="f">To<input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>}
+        {preset === 'Custom' && <label className="gl-filter"><span className="gl-filter-label">From</span><input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>}
+        {preset === 'Custom' && <label className="gl-filter"><span className="gl-filter-label">To</span><input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>}
       </div>
-      <div className="form-grid no-print">
+
+      <div className="gl-account no-print">
+        <label className="gl-filter-label" htmlFor="gl-account-input">Account Title</label>
         <div
-          className="f gl-select-wrap gl-account-field"
+          className="gl-account-control"
           onMouseLeave={() => { if (document.activeElement !== searchRef.current) setOpen(false); }}
           onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
-        >Account Title
+        >
           <div className="gl-searchrow" onMouseEnter={() => setOpen(true)}>
-            <input ref={searchRef} value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
-            {input && <button type="button" className="btn ghost small" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">Clear</button>}
-            <button type="button" className="btn ghost small" onClick={() => setOpen(o => !o)} aria-expanded={open} aria-label={open ? 'Collapse account list' : 'Expand account list'}>{open ? '▾' : '▸'}</button>
+            <input id="gl-account-input" ref={searchRef} value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
+            {input && <button type="button" className="gl-clear" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">✕</button>}
           </div>
-          {parent1010 && (
-            <div className="gl-bankpick" aria-label="Cash in Bank subaccount picker">
-              <div
-                className="gl-hoverwrap"
-                onMouseEnter={() => setCashOpen(true)}
-                onMouseLeave={() => setCashOpen(false)}
-                onFocus={() => setCashOpen(true)}
-                onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setCashOpen(false); }}
-                onKeyDown={e => { if (e.key === 'Escape') { setCashOpen(false); (e.currentTarget.querySelector('.gl-cashbtn') as HTMLElement | null)?.focus(); } }}
-              >
-                <div className={'gl-cashbtn gl-parentbtn' + (code === '1010' ? ' selected' : '')}>
-                  <button type="button" className="gl-pick" onClick={() => pick(parent1010.code, parent1010.name)} aria-haspopup="menu" aria-expanded={cashOpen} aria-controls="gl-bank-submenu" title="Select 1010 Cash in Bank">
-                    <span className="gl-name"><strong>Cash in Bank</strong></span>
-                  </button>
-                  <span className="gl-subcount">5 subaccounts</span>
-                  <button type="button" className="gl-expand" onClick={() => setCashOpen(v => !v)} aria-expanded={cashOpen} aria-controls="gl-bank-submenu" aria-label={(cashOpen ? 'Collapse' : 'Expand') + ' bank subaccounts'}>
-                    {cashOpen ? '▾' : '▸'}
-                  </button>
-                </div>
-                <div id="gl-bank-submenu" role="menu" aria-label="Cash in Bank choices" className={'gl-flyout' + (cashOpen ? ' open' : '')} aria-hidden={!cashOpen}>
-                  {bankDropdownChoices().map(c => (
-                    <button key={c.code} type="button" role="menuitem" tabIndex={cashOpen ? 0 : -1} className={'gl-opt gl-child' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title={c.code === '1010' ? 'Parent/total account — uses the existing 1010 ledger filter' : 'UI-only option — no Chart of Accounts mapping'}>
-                      <span className="gl-code">{c.code}</span><span className="gl-name">{c.code === '1010' ? <strong>{c.name}</strong> : c.name}</span><span className="gl-type">{c.code === '1010' ? parent1010.type : 'UI-only'}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
           {open && (
             <div className="gl-list" id="gl-account-list" role="listbox" aria-label="Chart of Accounts">
               {filtered.length === 0 && filteredChildren.length === 0 && <div className="gl-empty">No accounts match “{input.trim()}”.</div>}
               {filtered.map(o => (
-                <button key={o.code} type="button" role="option" aria-selected={code === o.code} className={'gl-opt' + (code === o.code ? ' selected' : '')} onClick={() => pick(o.code, o.name)}>
-                  <span className="gl-code">{o.code}</span><span className="gl-name">{o.name}</span><span className="gl-type">{o.type}</span>
-                </button>
+                <React.Fragment key={o.code}>
+                  <button type="button" role="option" aria-selected={code === o.code} className={'gl-opt' + (code === o.code ? ' selected' : '')} onClick={() => pick(o.code, o.name)}>
+                    <span className="gl-code">{o.code}</span><span className="gl-name">{o.name}</span><span className="gl-type">{o.type}</span>
+                  </button>
+                  {o.code === '1010' && bankChildren.map(c => (
+                    <button key={c.code} type="button" role="option" aria-selected={code === c.code} className={'gl-opt gl-child gl-searchchild' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title="UI-only option — no Chart of Accounts mapping">
+                      <span className="gl-code">{c.code}</span><span className="gl-name">{c.name}</span><span className="gl-type">UI-only</span>
+                    </button>
+                  ))}
+                </React.Fragment>
               ))}
               {q.length > 0 && filteredChildren.map(c => (
                 <button key={c.code} type="button" role="option" aria-selected={code === c.code} className={'gl-opt gl-child gl-searchchild' + (code === c.code ? ' selected' : '')} onClick={() => pick(c.code, c.name)} title="UI-only option — no Chart of Accounts mapping">
@@ -305,50 +285,44 @@ function GeneralLedger() {
           )}
         </div>
       </div>
+
       {!account && uiChild && (
-        <div className="notice" style={{ marginTop: 10 }}>
-          <strong>{uiChild.code} — {uiChild.name}</strong> is a UI-only subaccount under 1010 Cash in Bank.
-          It has no Chart of Accounts mapping, so no balances or transactions are shown — nothing is fabricated.
-          Select the <strong>1010 — Cash in Bank</strong> parent to view its posted ledger activity.
-        </div>
+        <p className="gl-msg"><strong>{uiChild.code} — {uiChild.name}</strong> is a UI-only subaccount under 1010 Cash in Bank; it has no ledger of its own. Select <strong>1010 — Cash in Bank</strong> to view its posted activity.</p>
       )}
-      {!account && !uiChild && (
-        input.trim()
-          ? <div className="warn">No account matches “{input.trim()}”. Pick a code from the Chart of Accounts list above.</div>
-          : <div className="notice">Select an account title above to view its posted ledger.</div>
-      )}
-      {rangeBad && <div className="warn">Invalid date range: From ({range.from}) is after To ({range.to}). Adjust the dates.</div>}
+      {!account && !uiChild && input.trim() && <p className="gl-msg bad">No account matches “{input.trim()}”. Pick a code from the Chart of Accounts list.</p>}
+      {!account && !uiChild && !input.trim() && !rangeBad && <p className="gl-msg">Select an account title to view its posted ledger.</p>}
+      {rangeBad && <p className="gl-msg bad">Invalid date range: From ({range.from}) is after To ({range.to}). Adjust the dates.</p>}
+
       {ledger && (
         <>
           <PrintHead title={`General Ledger — ${ledger.account.code} — ${ledger.account.name}`} unit={unit} from={range.from} to={range.to} />
+          <h3 className="gl-acct-title">{ledger.account.code} — {ledger.account.name}</h3>
           {ledger.lines.length === 0 ? (
-            <div className="notice">No posted entries for {ledger.account.code} — {ledger.account.name} in the selected scope and period.</div>
+            <p className="gl-msg">No posted entries for {ledger.account.code} — {ledger.account.name} in the selected scope and period.</p>
           ) : (
-            <>
-              <div className="tbl-wrap"><table className="tbl gl-table">
-                <thead><tr><th>Date</th><th>Account Title</th><th className="num">Debit</th><th className="num">Credit</th></tr></thead>
-                <tbody>
-                  <tr className="gl-account-row"><td></td><td><strong>{ledger.account.code} — {ledger.account.name}</strong></td><td></td><td></td></tr>
-                  {ledger.lines.map((l, i) => (
-                    <tr key={i}>
-                      <td>{l.date}</td>
-                      <td>{l.particulars}{l.unit ? <div className="small muted">{l.unit}</div> : null}</td>
-                      <td className="num">{l.debit ? <Money n={l.debit} /> : '—'}</td>
-                      <td className="num">{l.credit ? <Money n={l.credit} /> : '—'}</td>
-                    </tr>
-                  ))}
-                  <tr className="total-row"><td colSpan={2}><strong>Total</strong></td><td className="num"><strong><Money n={ledger.totalDebit} /></strong></td><td className="num"><strong><Money n={ledger.totalCredit} /></strong></td></tr>
-                </tbody>
-              </table></div>
-              <div className="gl-signatures">
-                <div className="gl-sig"><span className="gl-sig-role">Prepared &amp; Checked By</span><span className="gl-sig-name">Accounting</span></div>
-                <div className="gl-sig"><span className="gl-sig-role">Approved By</span><span className="gl-sig-name">C.E.O.</span></div>
-              </div>
-            </>
+            <div className="tbl-wrap"><table className="tbl gl-table">
+              <thead><tr><th>Date</th><th>Account Title</th><th className="num">Debit</th><th className="num">Credit</th></tr></thead>
+              <tbody>
+                {ledger.lines.map((l, i) => (
+                  <tr key={i}>
+                    <td>{l.date}</td>
+                    <td>{l.particulars}{l.unit ? <div className="small muted">{l.unit}</div> : null}</td>
+                    <td className="num">{l.debit ? <Money n={l.debit} /> : '—'}</td>
+                    <td className="num">{l.credit ? <Money n={l.credit} /> : '—'}</td>
+                  </tr>
+                ))}
+                <tr className="total-row"><td colSpan={2}><strong>Total</strong></td><td className="num"><strong><Money n={ledger.totalDebit} /></strong></td><td className="num"><strong><Money n={ledger.totalCredit} /></strong></td></tr>
+              </tbody>
+            </table></div>
           )}
-          <div className="btn-row no-print"><button className="btn ghost small" onClick={() => window.print()}>🖨 Print ledger</button></div>
+          <div className="gl-signatures">
+            <div className="gl-sig"><span className="gl-sig-role">Prepared &amp; Checked By</span><span className="gl-sig-name">Accounting</span></div>
+            <div className="gl-sig"><span className="gl-sig-role">Approved By</span><span className="gl-sig-name">C.E.O.</span></div>
+          </div>
         </>
       )}
+
+      <div className="gl-actions no-print"><button className="btn ghost small" onClick={() => window.print()}>🖨 Print ledger</button></div>
     </div>
   );
 }

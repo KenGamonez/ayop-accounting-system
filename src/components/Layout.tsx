@@ -93,6 +93,11 @@ export default function Layout() {
   // screen. On the New Transaction screen they merely duplicate the entry
   // guidance, so they are suppressed there only — other screens are unchanged.
   const hideSharedDemoText = path === '/admin/transaction';
+  // The General Ledger is presented as a formal accounting document, so the
+  // app-wide demo banner above it is suppressed on that tab only — other
+  // Accounting tabs and the rest of the shell are unchanged. The sidebar
+  // notice is shell chrome and stays.
+  const isGlTab = path === '/admin/accounting' && new URLSearchParams(loc.search).get('tab') === 'gl';
   // Centralized demo route guard: Warehouse accounts cannot deep-link into
   // accountant-only screens (query strings can't bypass — the path decides).
   if (user && !canVisit(user.role, path)) {
@@ -136,7 +141,7 @@ export default function Layout() {
             <button className="btn ghost small" onClick={() => { if (mode === 'live') { void liveLogout().then(() => nav('/admin/login')); } else { logout(); nav('/admin/login'); } }}>Log out</button>
           </div>
         </div>
-        {mode === 'demo' && !hideSharedDemoText && (
+        {mode === 'demo' && !hideSharedDemoText && !isGlTab && (
         <div className="demo-banner">
           Demonstration environment — all figures are <strong>synthetic</strong> and require accounting validation before production use. Pending transactions are not posted.
         </div>
