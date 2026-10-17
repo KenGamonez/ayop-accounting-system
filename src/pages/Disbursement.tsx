@@ -116,6 +116,9 @@ export default function Disbursement() {
             lines={viewLines}
             signatories={{ preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
             footer={`Saved disbursement ${viewTxn.id} — ${viewTxn.status}; not posted.`}
+            payee={viewTxn.supplier}
+            paymentAccount={viewTxn.accountCode ? `${viewTxn.accountCode} — ${viewTxn.accountName}` : ''}
+            amount={viewTxn.amount}
           />
         </div>
       </>

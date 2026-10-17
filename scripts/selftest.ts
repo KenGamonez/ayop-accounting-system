@@ -464,6 +464,15 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     check('entry: Debit precedes Credit in the grid and voucher (static)',
       compSrc.indexOf('>Debit<') > -1 && compSrc.indexOf('>Credit<') > -1
       && compSrc.indexOf('>Debit<') < compSrc.indexOf('>Credit<'));
+    // Type-aware voucher: company name exactly once with the address beneath,
+    // control number in the transaction-info grid, and a payment-style table for
+    // Disbursement vs a debit/credit table for Journal.
+    check('voucher: type-aware documents, company name once with address (static)',
+      (voucherSrc.match(/AYOP GROUP OF COMPANIES/g) ?? []).length === 1
+      && voucherSrc.includes('JEM Bldg., Medina St. Carmen-Annex, Ozamiz City - Misamis Occidental')
+      && voucherSrc.includes('Control No.')
+      && voucherSrc.includes('Account Charged') && voucherSrc.includes('Account Title')
+      && voucherSrc.includes('isDisbursementType'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their
   // counts/amounts are gone, while the entry form, filters, search, status
