@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { COA, BUSINESS_UNITS, TRANSACTION_KINDS, peso } from '../data/seed';
-import VoucherPrint, { voucherTitleFor } from './VoucherPrint';
+import VoucherPrint from './VoucherPrint';
 
 export interface AccountEntry {
   id: string;
@@ -90,8 +90,6 @@ export default function TransactionEntryForm({
       auditedBy: '',
     },
   }));
-
-  const voucherTitle = voucherTitleFor(formData.transactionType);
 
   const voucherLines = useMemo(
     () => formData.entries.map(e => ({
@@ -383,14 +381,12 @@ export default function TransactionEntryForm({
       <div className="print-only">
         <VoucherPrint
           controlNo={formData.controlNo}
-          title={voucherTitle}
           date={formData.date}
           businessUnit={formData.businessUnit}
           transactionType={formData.transactionType}
           particulars={formData.particulars}
           lines={voucherLines}
           signatories={formData.signatories}
-          footer="Draft — not submitted or posted. Synthetic demonstration data; requires accounting validation before production use."
         />
       </div>
     </div>

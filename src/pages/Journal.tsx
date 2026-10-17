@@ -112,14 +112,15 @@ export default function Journal() {
         <div className="print-only">
           <VoucherPrint
             controlNo={viewControlNo}
-            title={voucherTitleFor('Journal')}
             date={viewEntry.date}
             businessUnit={viewEntry.businessUnit}
             transactionType="Journal"
             particulars={viewEntry.particulars}
             lines={viewLines}
             signatories={{ preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
-            footer={`Saved journal ${viewEntry.ref} — ${viewEntry.status}; not posted.`}
+            recordNo={viewEntry.ref}
+            status={viewEntry.status}
+            note={viewEntry.queuedTxn ? `Queued as ${viewEntry.queuedTxn} — awaiting review.` : undefined}
           />
         </div>
       </>

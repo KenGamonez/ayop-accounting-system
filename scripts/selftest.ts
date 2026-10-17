@@ -464,17 +464,18 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     check('entry: Debit precedes Credit in the grid and voucher (static)',
       compSrc.indexOf('>Debit<') > -1 && compSrc.indexOf('>Credit<') > -1
       && compSrc.indexOf('>Debit<') < compSrc.indexOf('>Credit<'));
-    // Type-aware voucher: company name exactly once with the address beneath,
-    // control number in the transaction-info grid, and a payment-style table for
-    // Disbursement vs a debit/credit table for Journal.
-    check('voucher: type-aware documents, company name once with address (static)',
-      (voucherSrc.match(/AYOP GROUP OF COMPANIES/g) ?? []).length === 1
-      && (voucherSrc.match(/JEM51 Accounting System/g) ?? []).length === 1
-      && voucherSrc.includes('JEM Bldg., Medina St. Carmen-Annex, Ozamiz City - Misamis Occidental')
-      && voucherSrc.includes('voucher-brand')
-      && voucherSrc.includes('Control No.')
-      && voucherSrc.includes('Account Charged') && voucherSrc.includes('Account Title')
-      && voucherSrc.includes('Printed by:')
+    // Header stripped: the voucher carries no letterhead (no company name,
+    // system brand, address, or printed-by line) and begins directly with the
+    // transaction details — Transaction Type | Control No., then Particulars.
+    check('voucher: letterhead stripped; leads with saved transaction details (static)',
+      !voucherSrc.includes('AYOP GROUP OF COMPANIES')
+      && !voucherSrc.includes('JEM51 Accounting System')
+      && !voucherSrc.includes('JEM Bldg., Medina St.')
+      && !voucherSrc.includes('Printed by:')
+      && voucherSrc.includes('voucher-top')
+      && voucherSrc.indexOf('Transaction Type') < voucherSrc.indexOf('Control No.')
+      && voucherSrc.indexOf('Control No.') < voucherSrc.indexOf('Particulars')
+      && voucherSrc.includes('Account Title') && voucherSrc.includes('Debit') && voucherSrc.includes('Credit')
       && voucherSrc.includes('isDisbursementType'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their

@@ -108,17 +108,14 @@ export default function Disbursement() {
         <div className="print-only">
           <VoucherPrint
             controlNo={viewControlNo}
-            title={voucherTitleFor(viewTxn.kind)}
             date={viewTxn.date}
             businessUnit={viewTxn.businessUnit}
             transactionType={viewTxn.kind}
             particulars={viewTxn.item}
             lines={viewLines}
             signatories={{ preparedBy: '', postedBy: '', approvedBy: '', auditedBy: '' }}
-            footer={`Saved disbursement ${viewTxn.id} — ${viewTxn.status}; not posted.`}
-            payee={viewTxn.supplier}
-            paymentAccount={viewTxn.accountCode ? `${viewTxn.accountCode} — ${viewTxn.accountName}` : ''}
-            amount={viewTxn.amount}
+            recordNo={viewTxn.id}
+            status={viewTxn.status}
           />
         </div>
       </>
