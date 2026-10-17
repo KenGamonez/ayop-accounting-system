@@ -349,9 +349,9 @@ function PayableTable({ title, empty, rows, client }: { title: string; empty: st
 }
 
 function BankRec() {
-  const [book, setBook] = useState(128450);
-  const [bank, setBank] = useState(141200);
-  const [deposit, setDeposit] = useState(12750);
+  const [book, setBook] = useState(0);
+  const [bank, setBank] = useState(0);
+  const [deposit, setDeposit] = useState(0);
   const [outstanding, setOutstanding] = useState(0);
   const adjusted = bank + deposit - outstanding;
   const diff = adjusted - book;

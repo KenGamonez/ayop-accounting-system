@@ -1,15 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, CLASSIFICATIONS } from '../data/seed';
-import { canResubmit } from '../data/ops';
+import { canResubmit, disbursementFromNewEntry, journalFromNewEntry, newEntryErrors } from '../data/ops';
 import { toCSV, fileName } from '../data/io';
 import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
 import { PageHead, Pill, Money } from '../components/ui';
-import TransactionEntryForm from '../components/TransactionEntryForm';
+import TransactionEntryForm, { type TransactionFormData } from '../components/TransactionEntryForm';
 
 export default function Transactions() {
-  const { txns, transition, user } = useStore();
+  const { txns, transition, user, addTxn, addJournal, journal } = useStore();
   const [fUnit, setFUnit] = useState('All');
   const [fClass, setFClass] = useState('All');
   const [fStatus, setFStatus] = useState('All');
@@ -25,10 +25,27 @@ export default function Transactions() {
     (!q || (t.item + t.supplier + t.id).toLowerCase().includes(q.toLowerCase()))
   ), [txns, fUnit, fClass, fStatus, q, mineOnly, user]);
 
-  // Front-end only: the new entry form keeps its state and totals in the
-  // browser. Nothing is persisted here — no addTxn, no API, no journal.
-  const handleFormSubmit = (_data: unknown) => {
-    setShow(false);
+  // Save the New Entry, then route it to the list that matches its
+  // Transaction Type: Disbursement records queue for accountant review via
+  // addTxn; Journal entries become drafts via addJournal. Unbalanced or
+  // incomplete entries are blocked with plain-language messages.
+  const handleFormSubmit = async (data: TransactionFormData) => {
+    const errs = newEntryErrors(data);
+    if (errs.length) { alert(errs.join('\n')); return; }
+    try {
+      if (data.transactionType === 'Journal') {
+        const refNo = 'JV-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + String(journal.length + 1).padStart(3, '0');
+        addJournal(journalFromNewEntry(data, refNo));
+        setShow(false);
+        alert(`${refNo} saved as a Journal draft. Open Transaction → Journal to queue it for review.`);
+      } else {
+        const txn = await addTxn(disbursementFromNewEntry(data, user?.name ?? 'Demo user'));
+        setShow(false);
+        alert(`${txn.id} saved to Disbursement and queued for accountant review.`);
+      }
+    } catch (e) {
+      alert(e instanceof Error ? e.message : 'Could not save the entry.');
+    }
   };
 
   return (

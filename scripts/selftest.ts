@@ -4,7 +4,8 @@ import { DATA_TYPES, autoMap, validateRows, dupKey, toCSV, fileName, importIdemK
 import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, isAllowed,
 nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS, validateDisbursement, inDateRange,
 dateRangeError, journalTotals, validateJournal, staffIdForName, canActOnApprovals, isCreator,
-ownRecords, canResubmit, guardTransition } from '../src/data/ops.ts';
+ownRecords, canResubmit, guardTransition, newEntryErrors, newEntryTotals,
+disbursementFromNewEntry, journalFromNewEntry } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF, CLASSIFICATIONS } from '../src/data/seed.ts';
@@ -24,7 +25,7 @@ import { INCOME_REVENUE_COLUMNS, INCOME_EXPENSE_COLUMNS } from '../src/pages/Rep
 import { visibleAccountingTabs, isUiCashChild, bankDropdownChoices, CASH_IN_BANK_CHILDREN, coerceBankSub, bankSubError } from '../src/pages/Accounting.tsx';
 import { displayStatus } from '../src/components/ui.tsx';
 import { SIDEBAR_HIDDEN_ROUTES } from '../src/data/access.ts';
-import { seedTransactions } from '../src/data/seed.ts';
+import { demoTxnFixtures } from './fixtures.ts';
 import type { Txn } from '../src/data/seed.ts';
 import type { PurchaseOrder } from '../src/data/seed.ts';
 
@@ -396,13 +397,14 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     && coerceBankSub('1010', '1010-3') === '1010-3' && coerceBankSub('1010', '') === ''
     && coerceBankSub('5000', '1010-3') === '' && coerceBankSub('1000', '1010-1') === '');
   // The redesigned entry form lives in a dedicated component wired into the
-  // Transaction screen. It is front-end only: state and totals stay in the
-  // browser and nothing is persisted (no addTxn/API/journal call).
+  // Transaction screen. The component stays presentational; the Transaction
+  // page performs the save and routes the entry to the matching list
+  // (Disbursement via addTxn, Journal draft via addJournal).
   {
     const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
     const compSrc = readFileSync('src/components/TransactionEntryForm.tsx', 'utf8');
     check('entry: dedicated form component wired in, diagram sections A-E (static)',
-      txnSrc.includes("import TransactionEntryForm from '../components/TransactionEntryForm'")
+      txnSrc.includes("from '../components/TransactionEntryForm'")
       && txnSrc.includes('<TransactionEntryForm')
       && compSrc.includes('NEW TRANSACTION (NEW ENTRY)')
       && compSrc.includes('A. Transaction Details') && compSrc.includes('B. Particulars')
@@ -410,8 +412,9 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && compSrc.includes('E. Signatories'));
     // Diagram parity: account-entry grid with Account Title / Credit / Debit,
     // three initial rows, add & remove, live totals and imbalance handling.
+    // The component itself never talks to the store.
     check('entry: account-entry grid, three rows, add/remove, live totals + imbalance (static)',
-      !txnSrc.includes('addTxn(') && !compSrc.includes('addTxn')
+      !compSrc.includes('addTxn') && !compSrc.includes('addJournal')
       && compSrc.includes('Account Title') && compSrc.includes('>Credit<') && compSrc.includes('>Debit<')
       && compSrc.includes('+ Add Entry')
       && (compSrc.match(/id: '[0-9]+', accountTitle: '', credit: '', debit: ''/g) || []).length === 3
@@ -420,6 +423,12 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && compSrc.includes('const totalDebit = round2(formData.entries.reduce')
       && compSrc.includes('inputMode="decimal"') && compSrc.includes('sanitizeAmount')
       && compSrc.includes('imbalance-warning') && compSrc.includes('balanced-indicator'));
+    check('entry: Save persists and routes by type to Disbursement/Journal (static)',
+      txnSrc.includes('addTxn(') && txnSrc.includes('addJournal(')
+      && txnSrc.includes('disbursementFromNewEntry') && txnSrc.includes('journalFromNewEntry')
+      && txnSrc.includes('newEntryErrors') && txnSrc.includes('handleFormSubmit'));
+    check('entry: submit button reads Save, old Submit-for-Review label gone (static)',
+      /className="btn blue">\s*Save\s*</.test(compSrc) && !compSrc.includes('Submit for Review'));
     check('entry: four signatories present (static)',
       compSrc.includes('Prepared & Checked By') && compSrc.includes('Posted By')
       && compSrc.includes('Approved By') && compSrc.includes('Audited By'));
@@ -541,12 +550,52 @@ check('journal blocks unbalanced totals',
 check('approval chain untouched', isAllowed('Approved' as never, 'Posted' as never)
   && !isAllowed('Draft' as never, 'Posted' as never) && countsAsPosted('Posted' as never));
 
+// ---- New Entry save: validation + routing mappers ----
+const neLines = [
+  { accountTitle: '5000', debit: '7700', credit: '' },
+  { accountTitle: '1010', debit: '', credit: '7700' },
+];
+const neBase = { date: '2026-10-14', businessUnit: 'Central Warehouse', transactionType: 'Disbursement', particulars: 'Gloves, 20 boxes', entries: neLines };
+check('new entry: balanced totals pass, unbalanced blocked',
+  newEntryTotals(neLines).balanced && newEntryTotals(neLines).debit === 7700
+  && newEntryErrors(neBase).length === 0
+  && newEntryErrors({ ...neBase, entries: [{ accountTitle: '5000', debit: '100', credit: '' }, { accountTitle: '1010', debit: '', credit: '90' }] }).some(m => /must match/.test(m)));
+check('new entry: missing fields + bad account + both-sides + single line blocked',
+  newEntryErrors({ ...neBase, date: '' }).some(m => /Date is required/.test(m))
+  && newEntryErrors({ ...neBase, particulars: '  ' }).some(m => /Particulars/.test(m))
+  && newEntryErrors({ ...neBase, businessUnit: 'Nope' }).some(m => /nine Ayop units/.test(m))
+  && newEntryErrors({ ...neBase, transactionType: 'Cash In' }).some(m => /Disbursement or Journal/.test(m))
+  && newEntryErrors({ ...neBase, entries: [{ accountTitle: '9999', debit: '10', credit: '' }, { accountTitle: '1010', debit: '', credit: '10' }] }).some(m => /unknown account/.test(m))
+  && newEntryErrors({ ...neBase, entries: [{ accountTitle: '5000', debit: '10', credit: '10' }, { accountTitle: '1010', debit: '', credit: '10' }] }).some(m => /not both/.test(m))
+  && newEntryErrors({ ...neBase, entries: [{ accountTitle: '5000', debit: '10', credit: '' }] }).some(m => /at least two/.test(m)));
+const neDis = disbursementFromNewEntry(neBase, 'Jeann');
+check('new entry → Disbursement maps total + first debit account',
+  neDis.kind === 'Disbursement' && neDis.amount === 7700 && neDis.supplierPrice === 7700
+  && neDis.accountCode === '5000' && neDis.accountName === 'Medical Supplies Expense'
+  && neDis.item === 'Gloves, 20 boxes' && neDis.enteredBy === 'Jeann' && neDis.classification === 'Expense', neDis);
+const neJrnl = journalFromNewEntry({ ...neBase, transactionType: 'Journal' }, 'JV-TEST-001');
+check('new entry → Journal keeps all lines, summary + draft status',
+  neJrnl.status === 'Draft' && neJrnl.sourceTxn === 'NEW ENTRY' && neJrnl.amount === 7700
+  && (neJrnl.lines ?? []).length === 2 && neJrnl.lines?.[0].accountCode === '5000'
+  && neJrnl.debitAccount === '5000 — Medical Supplies Expense'
+  && neJrnl.creditAccount === '1010 — Cash in Bank' && neJrnl.ref === 'JV-TEST-001', neJrnl);
+const neJrnl3 = journalFromNewEntry({
+  ...neBase, transactionType: 'Journal',
+  entries: [
+    { accountTitle: '5000', debit: '100', credit: '' },
+    { accountTitle: '5100', debit: '50', credit: '' },
+    { accountTitle: '1010', debit: '', credit: '150' },
+  ],
+}, 'JV-TEST-002');
+check('new entry → Journal marks multiple credit accounts honestly',
+  neJrnl3.creditAccount === 'Multiple (3 lines)' && neJrnl3.amount === 150 && (neJrnl3.lines ?? []).length === 3);
+
 // ---- income & expense ITEM CODE + GL-only screen + sidebar ----
 check('income tables headed ITEM CODE (not Item)',
   INCOME_REVENUE_COLUMNS.includes('ITEM CODE' as never) && INCOME_EXPENSE_COLUMNS.includes('ITEM CODE' as never)
   && !INCOME_REVENUE_COLUMNS.includes('Item' as never) && !INCOME_EXPENSE_COLUMNS.includes('Item' as never)
   && INCOME_REVENUE_COLUMNS.includes('Particulars' as never) && INCOME_EXPENSE_COLUMNS.includes('Particulars' as never));
-const seedInc = incomeSummary(seedTransactions, { unit: 'All units', from: '', to: '' });
+const seedInc = incomeSummary(demoTxnFixtures, { unit: 'All units', from: '', to: '' });
 const seedCodes = new Set(COA.map(c => c.code));
 const probeExp = incomeSummary(
   [mkTxn({ id: 'P1', date: '2026-10-05', status: 'Posted', classification: 'Expense', amount: 75, accountCode: '5100', accountName: 'Office Supplies Expense' })],
@@ -641,17 +690,17 @@ check('JeAnn identity reused (no duplicate employee)',
   && jeanns[0].unit === 'Central Warehouse' && STAFF.length === 7, jeanns);
 check('name-to-ID resolution', staffIdForName('Jeann') === 'jeann'
   && staffIdForName('Daniflor Calago') === 'dani' && staffIdForName('Nobody') === null);
-check('seed warehouse records carry JeAnn’s user ID',
-  seedTransactions.filter(t => t.createdBy === 'jeann').map(t => t.id).sort().join(',') === 'TXN-2026-0043,TXN-2026-0044');
+check('fixture warehouse records carry JeAnn’s user ID',
+  demoTxnFixtures.filter(t => t.createdBy === 'jeann').map(t => t.id).sort().join(',') === 'TXN-2026-0043,TXN-2026-0044');
 check('approval actions limited to Accounting + CEO (demo presentation)',
   canActOnApprovals('Accounting') && canActOnApprovals('CEO')
   && !canActOnApprovals('Warehouse') && !canActOnApprovals('HR')
   && !canActOnApprovals('Diagnostics Cashier') && !canActOnApprovals('Pharmacy') && !canActOnApprovals('IT'));
 check('own-records filter uses stored user ID',
-  ownRecords(seedTransactions, 'jeann').length === 2
-  && ownRecords(seedTransactions, 'jeann').every(t => t.createdBy === 'jeann')
-  && ownRecords(seedTransactions, null).length === 0
-  && ownRecords(seedTransactions, 'dani').length === 2);
+  ownRecords(demoTxnFixtures, 'jeann').length === 2
+  && ownRecords(demoTxnFixtures, 'jeann').every(t => t.createdBy === 'jeann')
+  && ownRecords(demoTxnFixtures, null).length === 0
+  && ownRecords(demoTxnFixtures, 'dani').length === 2);
 check('creator may resubmit, others may not (approvers may handle any)',
   canResubmit('Warehouse', 'jeann', { createdBy: 'jeann' })
   && !canResubmit('Warehouse', 'jeann', { createdBy: 'dani' })
@@ -705,7 +754,7 @@ check('account switch restores correct dashboard/nav/routes both directions',
   && switchToJoy.kind === 'full' && switchToJoy.act && switchToJoy.coa
   && backToJeann.kind === 'warehouse' && backToJeann.nav === 6 && !backToJeann.gl);
 check('accounting keeps consolidated visibility + protections intact',
-  seedTransactions.length === 10
+  demoTxnFixtures.length === 10
   && canActOnApprovals('Accounting')
   && !isAllowed('Draft' as never, 'Posted' as never)
   && guardTransition({ id: 'T', createdBy: 'dani' }, 'Approved', 'dani') !== null);

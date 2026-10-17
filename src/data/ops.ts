@@ -2,8 +2,8 @@
 // receipt math, status derivation, and inventory-type defaults. Covered by
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
-import type { PurchaseOrder, TxnStatus } from './seed';
-import { BUSINESS_UNITS, COA, STAFF } from './seed';
+import type { JournalEntry, PurchaseOrder, Txn, TxnStatus } from './seed';
+import { BUSINESS_UNITS, COA, STAFF, TRANSACTION_KINDS } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
 
@@ -261,4 +261,137 @@ export function validateJournal(j: JournalInput): Record<string, string> {
   if (!e.lines && t.debit === 0) e.totals = 'Enter at least one debit amount.';
   else if (!e.lines && !t.balanced) e.totals = `Debits and credits must match — difference is ${Math.abs(t.diff).toLocaleString('en-PH')}. Adjust the lines above.`;
   return e;
+}
+
+// ---------- New Entry save: route to Disbursement or Journal by type ----------
+
+/** One account line from the New Entry form (amounts are raw typed strings). */
+export interface NewEntryLine {
+  accountTitle: string;
+  debit: string;
+  credit: string;
+}
+
+/** The New Entry form payload, narrowed to the fields the save path needs. */
+export interface NewEntryInput {
+  date: string;
+  businessUnit: string;
+  transactionType: string;
+  particulars: string;
+  entries: NewEntryLine[];
+}
+
+/** Same money rule the entry form uses: blank/invalid -> 0, never negative. */
+function entryMoney(raw: string): number {
+  const parsed = parseFloat(String(raw ?? '').replace(/,/g, ''));
+  return isNaN(parsed) ? 0 : Math.max(0, parsed);
+}
+
+export function newEntryTotals(entries: NewEntryLine[]): { debit: number; credit: number; balanced: boolean } {
+  const debit = entries.reduce((s, e) => s + entryMoney(e.debit), 0);
+  const credit = entries.reduce((s, e) => s + entryMoney(e.credit), 0);
+  return { debit, credit, balanced: debit > 0 && Math.abs(debit - credit) < 0.005 };
+}
+
+/**
+ * Plain-language validation for a New Entry save. Balanced debit=credit is
+ * required so both destination records (Disbursement amount, Journal draft)
+ * are structurally valid.
+ */
+export function newEntryErrors(d: NewEntryInput): string[] {
+  const errs: string[] = [];
+  if (!d.date) errs.push('Date is required — pick the transaction date.');
+  else if (!/^\d{4}-\d{2}-\d{2}$/.test(d.date) || isNaN(new Date(d.date + 'T00:00:00').getTime()))
+    errs.push('Date must be a real calendar date (YYYY-MM-DD).');
+  if (!d.particulars.trim()) errs.push('Particulars are required — say in plain words what this entry records.');
+  if (!BUSINESS_UNITS.includes(d.businessUnit as never))
+    errs.push('Business Unit must be one of the nine Ayop units.');
+  if (!TRANSACTION_KINDS.includes(d.transactionType as never))
+    errs.push('Transaction Type must be Disbursement or Journal.');
+  const touched = d.entries.filter(e => (e.accountTitle ?? '').trim() || entryMoney(e.debit) > 0 || entryMoney(e.credit) > 0);
+  if (touched.length < 2) errs.push('Add at least two account lines — one debit and one credit.');
+  d.entries.forEach((e, i) => {
+    const code = (e.accountTitle ?? '').trim();
+    const dr = entryMoney(e.debit);
+    const cr = entryMoney(e.credit);
+    if (!code && dr === 0 && cr === 0) return; // untouched row
+    if (!code) { errs.push(`Line ${i + 1}: choose an account from the chart.`); return; }
+    if (!COA.some(c => c.code === code)) { errs.push(`Line ${i + 1}: unknown account code.`); return; }
+    if (dr > 0 && cr > 0) errs.push(`Line ${i + 1}: put the amount in Debit or Credit, not both.`);
+    else if (dr === 0 && cr === 0) errs.push(`Line ${i + 1}: enter an amount in Debit or Credit.`);
+  });
+  const t = newEntryTotals(d.entries);
+  if (!errs.length) {
+    if (t.debit === 0) errs.push('Enter at least one debit amount.');
+    else if (!t.balanced)
+      errs.push(`Debits and credits must match — difference is ${Math.abs(t.debit - t.credit).toLocaleString('en-PH')}. Adjust the lines above.`);
+  }
+  return errs;
+}
+
+/** Account code/name of the first debit line (falls back to the first coded line). */
+function firstDebitAccount(d: NewEntryInput): { code: string; name: string } {
+  const lines = d.entries.map(e => ({ code: (e.accountTitle ?? '').trim(), debit: entryMoney(e.debit) }));
+  const hit = lines.find(l => l.debit > 0) ?? lines.find(l => l.code);
+  const acct = COA.find(c => c.code === hit?.code);
+  return { code: acct?.code ?? hit?.code ?? '', name: acct?.name ?? '' };
+}
+
+/**
+ * Map a balanced New Entry to a Disbursement record: the entry total becomes
+ * the payment amount and the first debit line its account (the form has no
+ * supplier, shown as an em dash). Nothing here is invented beyond the existing
+ * Disbursement shape; it queues for accountant review via addTxn.
+ */
+export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string): Omit<Txn, 'id' | 'status'> {
+  const t = newEntryTotals(d.entries);
+  const acct = firstDebitAccount(d);
+  return {
+    date: d.date,
+    businessUnit: d.businessUnit,
+    classification: 'Expense',
+    kind: 'Disbursement',
+    item: d.particulars.trim(),
+    category: 'Medical Supplies',
+    supplier: '—',
+    supplierPrice: t.debit,
+    retailPrice: 0,
+    quantity: 1,
+    amount: t.debit,
+    accountCode: acct.code,
+    accountName: acct.name,
+    enteredBy,
+    remarks: 'New entry saved from Transaction — queued for accountant review, not posted',
+  };
+}
+
+/**
+ * Map a balanced New Entry to a Journal draft, keeping every usable line.
+ * Summary fields mirror the guided journal form (first debit/credit accounts).
+ */
+export function journalFromNewEntry(d: NewEntryInput, ref: string): Omit<JournalEntry, 'id'> {
+  const lines = d.entries
+    .map(e => ({ code: (e.accountTitle ?? '').trim(), debit: entryMoney(e.debit), credit: entryMoney(e.credit) }))
+    .filter(l => l.code && (l.debit > 0 || l.credit > 0))
+    .map(l => {
+      const acct = COA.find(c => c.code === l.code);
+      return { accountCode: l.code, accountName: acct?.name ?? '', debit: l.debit, credit: l.credit };
+    });
+  const firstDr = lines.find(l => l.debit > 0);
+  const firstCr = lines.find(l => l.credit > 0);
+  const total = lines.reduce((s, l) => s + l.debit, 0);
+  return {
+    date: d.date,
+    ref,
+    particulars: d.particulars.trim(),
+    businessUnit: d.businessUnit,
+    debitAccount: firstDr ? `${firstDr.accountCode} — ${firstDr.accountName}` : '',
+    creditAccount: firstCr
+      ? (lines.length === 2 ? `${firstCr.accountCode} — ${firstCr.accountName}` : `Multiple (${lines.length} lines)`)
+      : '',
+    amount: total,
+    status: 'Draft',
+    sourceTxn: 'NEW ENTRY',
+    lines,
+  };
 }

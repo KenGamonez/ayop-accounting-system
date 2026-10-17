@@ -368,7 +368,7 @@ export default function TransactionEntryForm({
             Print Transaction
           </button>
           <button type="submit" className="btn blue">
-            Submit for Review
+            Save
           </button>
         </div>
       </form>
