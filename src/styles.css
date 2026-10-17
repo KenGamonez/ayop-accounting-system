@@ -200,6 +200,17 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 .gl-searchchild { border-left: 2px solid #c6d6f8; border-radius: 0 6px 6px 0; margin-left: 24px; width: calc(100% - 24px); }
 .gl-empty { padding: 8px 10px; font-size: 12.5px; color: var(--muted); }
 
+/* General Ledger — formal report layout */
+.gl-report-title { margin: 0 0 12px; font-size: 15px; color: var(--navy); text-transform: uppercase; letter-spacing: .06em; }
+.gl-filters { margin-bottom: 10px; }
+.gl-account-field { margin-bottom: 12px; }
+.gl-table { min-width: 0; }
+.gl-account-row td { background: #f7f9fd; color: var(--navy); }
+.gl-signatures { display: flex; justify-content: space-between; gap: 40px; margin-top: 34px; flex-wrap: wrap; }
+.gl-sig { display: flex; flex-direction: column; gap: 2px; min-width: 210px; border-top: 1px solid var(--line); padding-top: 6px; }
+.gl-sig-role { font-size: 11.5px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--navy); }
+.gl-sig-name { font-size: 13px; color: var(--ink); }
+
 /* login */
 .login-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--navy); padding: 20px; }
 .login-card { background: #fff; border-radius: 14px; max-width: 860px; width: 100%; display: grid; grid-template-columns: 1.05fr 1fr; overflow: hidden; box-shadow: 0 20px 60px rgba(0,0,0,.3); }
@@ -273,6 +284,11 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
   .card { box-shadow: none; border: none; padding: 0; margin-bottom: 12px; }
   .card.statement { border: none; }
   .print-head { display: block; margin-bottom: 10px; }
+  .gl-report { border: none; }
+  .gl-report-title { color: #000; }
+  .gl-account-row td { background: transparent; }
+  .gl-sig { border-top-color: #000; }
+  .gl-sig-role, .gl-sig-name { color: #000; }
   .print-company { font-size: 12px; color: #444; }
   .print-head h2 { margin: 2px 0; font-size: 19px; color: #000; }
   .print-meta { font-size: 11.5px; color: #333; }

@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { BUSINESS_UNITS, COA, Txn, peso } from '../data/seed';
+import { BUSINESS_UNITS, COA, Txn } from '../data/seed';
 import { countsAsPosted } from '../data/ops';
 import { accountLedger, accountOptions, getAccount } from '../data/finance';
 import { monthRange } from '../data/close';
@@ -86,8 +86,12 @@ export default function Accounting() {
 
   return (
     <>
-      <PageHead title="Accounting" sub="Chart of Accounts, General Ledger (posted entries only), payables / receivables summaries, bank reconciliation worksheet, and audit-trail preview. Synthetic demo." />
-      <div className="notice">Control: only <strong>Posted</strong> transactions appear in the General Ledger and statements. Draft, in-review, and rejected items are excluded.</div>
+      {tab !== 'gl' && (
+        <>
+          <PageHead title="Accounting" sub="Chart of Accounts, General Ledger (posted entries only), payables / receivables summaries, bank reconciliation worksheet, and audit-trail preview. Synthetic demo." />
+          <div className="notice">Control: only <strong>Posted</strong> transactions appear in the General Ledger and statements. Draft, in-review, and rejected items are excluded.</div>
+        </>
+      )}
       {tab !== 'gl' && (
         <div className="btn-row no-print" style={{ marginBottom: 12 }}>
           {visibleAccountingTabs(tab).map(t => (
@@ -220,14 +224,36 @@ function GeneralLedger() {
   const pick = (c: string, n: string) => { setInput(`${c} — ${n}`); setOpen(false); setCashOpen(false); };
 
   return (
-    <div className="card statement">
-      <h3>General Ledger — account first, then period</h3>
+    <div className="card statement gl-report">
+      <h2 className="gl-report-title">General Ledger</h2>
+      <div className="form-grid gl-filters no-print">
+        <label className="f">Business Unit
+          <select value={unit} onChange={e => setUnit(e.target.value)}><option>All units</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
+        </label>
+        <label className="f">Periodic
+          <select value={preset} onChange={e => setPreset(e.target.value as GLPreset)}>
+            <option>Monthly</option><option>Quarterly</option><option>Six months</option><option>Yearly</option><option>Custom</option>
+          </select>
+        </label>
+        <label className="f">Year
+          <select value={year} onChange={e => setYear(Number(e.target.value))}>{GL_YEARS.map(y => <option key={y}>{y}</option>)}</select>
+        </label>
+        {subLabel && <label className="f">{subLabel}
+          <select value={sub} onChange={e => setSub(Number(e.target.value))}>
+            {preset === 'Monthly' && GL_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+            {preset === 'Quarterly' && [1, 2, 3, 4].map(q => <option key={q} value={q}>Q{q}</option>)}
+            {preset === 'Six months' && [<option key={1} value={1}>January – June</option>, <option key={2} value={2}>July – December</option>]}
+          </select>
+        </label>}
+        {preset === 'Custom' && <label className="f">From<input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>}
+        {preset === 'Custom' && <label className="f">To<input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>}
+      </div>
       <div className="form-grid no-print">
         <div
-          className="f gl-select-wrap"
+          className="f gl-select-wrap gl-account-field"
           onMouseLeave={() => { if (document.activeElement !== searchRef.current) setOpen(false); }}
           onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}
-        >Account — search code or name
+        >Account Title
           <div className="gl-searchrow" onMouseEnter={() => setOpen(true)}>
             <input ref={searchRef} value={input} onChange={e => { setInput(e.target.value); setOpen(true); }} onFocus={() => setOpen(true)} placeholder="Search — e.g. 1010 Cash in Bank" role="combobox" aria-expanded={open} aria-controls="gl-account-list" aria-label="Search accounts by code or name" />
             {input && <button type="button" className="btn ghost small" onClick={() => { setInput(''); setOpen(true); }} aria-label="Clear account selection">Clear</button>}
@@ -277,28 +303,7 @@ function GeneralLedger() {
               ))}
             </div>
           )}
-          <span className="small muted">Choose a bank subaccount.</span>
         </div>
-        <label className="f">Business Unit
-          <select value={unit} onChange={e => setUnit(e.target.value)}><option>All units</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
-        </label>
-        <label className="f">Period
-          <select value={preset} onChange={e => setPreset(e.target.value as GLPreset)}>
-            <option>Monthly</option><option>Quarterly</option><option>Six months</option><option>Yearly</option><option>Custom</option>
-          </select>
-        </label>
-        <label className="f">Year
-          <select value={year} onChange={e => setYear(Number(e.target.value))}>{GL_YEARS.map(y => <option key={y}>{y}</option>)}</select>
-        </label>
-        {subLabel && <label className="f">{subLabel}
-          <select value={sub} onChange={e => setSub(Number(e.target.value))}>
-            {preset === 'Monthly' && GL_MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            {preset === 'Quarterly' && [1, 2, 3, 4].map(q => <option key={q} value={q}>Q{q}</option>)}
-            {preset === 'Six months' && [<option key={1} value={1}>January – June</option>, <option key={2} value={2}>July – December</option>]}
-          </select>
-        </label>}
-        {preset === 'Custom' && <label className="f">From<input type="date" value={customFrom} onChange={e => setCustomFrom(e.target.value)} /></label>}
-        {preset === 'Custom' && <label className="f">To<input type="date" value={customTo} onChange={e => setCustomTo(e.target.value)} /></label>}
       </div>
       {!account && uiChild && (
         <div className="notice" style={{ marginTop: 10 }}>
@@ -310,39 +315,35 @@ function GeneralLedger() {
       {!account && !uiChild && (
         input.trim()
           ? <div className="warn">No account matches “{input.trim()}”. Pick a code from the Chart of Accounts list above.</div>
-          : <div className="notice">Select an account code above to view its posted ledger activity. Nothing is shown until an account is selected — no balances are fabricated.</div>
+          : <div className="notice">Select an account title above to view its posted ledger.</div>
       )}
       {rangeBad && <div className="warn">Invalid date range: From ({range.from}) is after To ({range.to}). Adjust the dates.</div>}
-      {account && (
-        <div className="notice" style={{ marginTop: 10 }}>
-          <strong>{account.code} — {account.name}</strong> · Type: {account.type} (balance follows the {account.type === 'Asset' || account.type === 'Expense' ? 'debit' : 'credit'} side)
-        </div>
-      )}
       {ledger && (
         <>
           <PrintHead title={`General Ledger — ${ledger.account.code} — ${ledger.account.name}`} unit={unit} from={range.from} to={range.to} />
           {ledger.lines.length === 0 ? (
-            <div className="notice">No eligible posted transactions for {ledger.account.code} in this scope and period. Pending, draft, rejected, and reversed entries are excluded by design.</div>
+            <div className="notice">No posted entries for {ledger.account.code} — {ledger.account.name} in the selected scope and period.</div>
           ) : (
             <>
-              <div className="tbl-wrap"><table className="tbl">
-                <thead><tr><th>Date</th><th>Ref</th><th>Particulars / Unit</th><th style={{ textAlign: 'right' }}>Debit</th><th style={{ textAlign: 'right' }}>Credit</th><th style={{ textAlign: 'right' }}>Running balance</th></tr></thead>
+              <div className="tbl-wrap"><table className="tbl gl-table">
+                <thead><tr><th>Date</th><th>Account Title</th><th className="num">Debit</th><th className="num">Credit</th></tr></thead>
                 <tbody>
-                  <tr><td colSpan={5}><strong>Opening balance (posted entries before {range.from || 'period start'})</strong></td><td className="num"><strong><Money n={ledger.opening} /></strong></td></tr>
+                  <tr className="gl-account-row"><td></td><td><strong>{ledger.account.code} — {ledger.account.name}</strong></td><td></td><td></td></tr>
                   {ledger.lines.map((l, i) => (
-                    <tr key={i}><td>{l.date}</td><td>{l.ref}</td>
-                      <td>{l.particulars}<div className="small muted">{l.unit}</div></td>
+                    <tr key={i}>
+                      <td>{l.date}</td>
+                      <td>{l.particulars}{l.unit ? <div className="small muted">{l.unit}</div> : null}</td>
                       <td className="num">{l.debit ? <Money n={l.debit} /> : '—'}</td>
                       <td className="num">{l.credit ? <Money n={l.credit} /> : '—'}</td>
-                      <td className="num"><Money n={l.balance} /></td></tr>
+                    </tr>
                   ))}
-                  <tr className="total-row"><td colSpan={3}><strong>Period totals</strong></td><td className="num"><strong><Money n={ledger.totalDebit} /></strong></td><td className="num"><strong><Money n={ledger.totalCredit} /></strong></td><td className="num"><strong><Money n={ledger.closing} /></strong></td></tr>
+                  <tr className="total-row"><td colSpan={2}><strong>Total</strong></td><td className="num"><strong><Money n={ledger.totalDebit} /></strong></td><td className="num"><strong><Money n={ledger.totalCredit} /></strong></td></tr>
                 </tbody>
               </table></div>
-              <p className="small muted">
-                Closing balance {peso(ledger.closing)} = opening {peso(ledger.opening)} adjusted by period activity on the account's normal side.
-                Demo model note: each entry contributes to one side by its classification; reversals offset the original.
-              </p>
+              <div className="gl-signatures">
+                <div className="gl-sig"><span className="gl-sig-role">Prepared &amp; Checked By</span><span className="gl-sig-name">Accounting</span></div>
+                <div className="gl-sig"><span className="gl-sig-role">Approved By</span><span className="gl-sig-name">C.E.O.</span></div>
+              </div>
             </>
           )}
           <div className="btn-row no-print"><button className="btn ghost small" onClick={() => window.print()}>🖨 Print ledger</button></div>

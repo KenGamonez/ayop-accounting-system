@@ -353,7 +353,7 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     && glSrc.includes('gl-bank-submenu') && glSrc.includes('gl-hoverwrap') && glSrc.includes('gl-flyout')
     && glSrc.includes('gl-bankpick') && !glSrc.includes('gl-cashpair') && !glSrc.includes('cash1000')
     && !glSrc.includes('expanded1010') && !glSrc.includes('showChildren')
-    && glSrc.includes('Choose a bank subaccount.') && !glSrc.includes('tap ▸ on touch')
+    && !glSrc.includes('Choose a bank subaccount.') && !glSrc.includes('tap ▸ on touch')
     && glSrc.includes('5 subaccounts')
     && getAccount('1000')?.name === 'Cash on Hand'
     && glSrc.includes('filtered.map')
