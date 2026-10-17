@@ -1,27 +1,21 @@
 import React, { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BUSINESS_UNITS, CLASSIFICATIONS, COA, TRANSACTION_KINDS } from '../data/seed';
+import { BUSINESS_UNITS, CLASSIFICATIONS } from '../data/seed';
 import { canResubmit } from '../data/ops';
-import { roleKindFor } from '../data/access';
 import { toCSV, fileName } from '../data/io';
 import { download } from '../components/download';
 import { useStore } from '../store/AppStore';
-import { PageHead, Pill, Money, WorkflowSteps } from '../components/ui';
-import { CASH_IN_BANK_CHILDREN, coerceBankSub, bankSubError } from './Accounting';
+import { PageHead, Pill, Money } from '../components/ui';
+import TransactionEntryForm from '../components/TransactionEntryForm';
 
 export default function Transactions() {
-  const { txns, addTxn, transition, user } = useStore();
+  const { txns, transition, user } = useStore();
   const [fUnit, setFUnit] = useState('All');
   const [fClass, setFClass] = useState('All');
   const [fStatus, setFStatus] = useState('All');
   const [q, setQ] = useState('');
   const [mineOnly, setMineOnly] = useState(false);
   const [show, setShow] = useState(false);
-  // bankSub is frontend-only entry state (see submit): the current save
-  // payload has no sub-account field, so it is kept isolated and never
-  // merged into the record until backend support exists.
-  const [form, setForm] = useState({ date: '2026-10-14', businessUnit: 'Diagnostic Center', classification: 'Expense' as string, kind: 'Disbursement' as string, supplier: '', amount: 0, accountCode: '5000', accountName: 'Medical Supplies Expense', bankSub: '', remarks: '' });
-  const [formError, setFormError] = useState('');
 
   const filtered = useMemo(() => txns.filter(t =>
     (fUnit === 'All' || t.businessUnit === fUnit) &&
@@ -31,107 +25,25 @@ export default function Transactions() {
     (!q || (t.item + t.supplier + t.id).toLowerCase().includes(q.toLowerCase()))
   ), [txns, fUnit, fClass, fStatus, q, mineOnly, user]);
 
-  const submit = async () => {
-    if (!form.supplier.trim() || !form.remarks.trim()) { alert('Counterparty and Particulars are required.'); return; }
-    const subErr = bankSubError(form.accountCode, form.bankSub);
-    if (subErr) { setFormError(subErr); return; }
-    // The removed item-detail inputs are reconstructed here with documented
-    // values so downstream displays, exports, and ledger particulars keep
-    // working: Item mirrors Particulars, category keeps its previous
-    // default, and prices/quantity stay neutral (Amount is entered
-    // directly, as before).
-    const item = form.remarks.trim();
-    // Frontend-only isolation: bankSub is intentionally excluded from the
-    // record — the save payload (Txn) has no sub-account field yet. Backend
-    // integration to persist it remains pending; nothing here changes the
-    // API contract or pretends the sub-account was saved.
-    const { bankSub: _notPersisted, ...rest } = form;
-    void _notPersisted;
-    try {
-      await addTxn({
-        date: rest.date, businessUnit: rest.businessUnit,
-        classification: rest.classification as never, kind: rest.kind as never,
-        item, category: 'Medical Supplies',
-        supplier: rest.supplier, supplierPrice: 0, retailPrice: 0, quantity: 1,
-        amount: rest.amount, accountCode: rest.accountCode, accountName: rest.accountName,
-        enteredBy: user?.name ?? 'Demo user', remarks: rest.remarks,
-      });
-    } catch (e) {
-      alert(e instanceof Error ? e.message : 'Could not save the transaction.');
-      return;
-    }
+  // Front-end only: the new entry form keeps its state and totals in the
+  // browser. Nothing is persisted here — no addTxn, no API, no journal.
+  const handleFormSubmit = (_data: unknown) => {
     setShow(false);
-    setFormError('');
-    setForm(f => ({ ...f, supplier: '', amount: 0, bankSub: '', remarks: '' }));
   };
-
-  const pickAccount = (code: string) => {
-    const a = COA.find(c => c.code === code);
-    setForm(f => ({ ...f, accountCode: code, accountName: a?.name ?? '', bankSub: coerceBankSub(code, f.bankSub) }));
-    setFormError('');
-  };
-
-  const bankSubLabel = form.bankSub
-    ? `${form.bankSub} — ${CASH_IN_BANK_CHILDREN.find(c => c.code === form.bankSub)?.name ?? ''}`
-    : '— None —';
 
   return (
     <>
-      <PageHead title="Transaction" sub="Transaction Entry — first step of the staff workflow. New entries go for review; they are not posted." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
+      <div className={show ? 'no-print' : undefined}>
+        <PageHead title="Transaction" sub="Transaction Entry — first step of the staff workflow. New entries go for review; they are not posted." actions={<button className="btn blue" onClick={() => setShow(s => !s)}>{show ? 'Close entry form' : '+ New transaction'}</button>} />
+      </div>
       {show && (
-        <div className="card txn-entry">
-          <h3>New transaction entry</h3>
-          <WorkflowSteps status="Draft" />
-          {formError && <div className="warn" role="alert">{formError}</div>}
-          <div className="form-grid">
-            <label className="f">Date<input type="date" value={form.date} onChange={e => setForm({ ...form, date: e.target.value })} /></label>
-            <label className="f">Business Unit<select value={form.businessUnit} onChange={e => setForm({ ...form, businessUnit: e.target.value })}>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select></label>
-            <label className="f">Account Title<select value={form.accountCode} onChange={e => pickAccount(e.target.value)}>{COA.map(a => <option key={a.code} value={a.code}>{a.code} — {a.name}</option>)}</select></label>
-            {roleKindFor(user?.role ?? '') !== 'warehouse' && (
-              <label className="f">Transaction Kind<select value={form.kind} onChange={e => setForm({ ...form, kind: e.target.value })}>{TRANSACTION_KINDS.map(k => <option key={k}>{k}</option>)}</select></label>
-            )}
-            <label className="f">Counterparty<input value={form.supplier} onChange={e => setForm({ ...form, supplier: e.target.value })} placeholder="e.g. MedSupply Trading" /></label>
-            <label className="f">Classification<select value={form.classification} onChange={e => setForm({ ...form, classification: e.target.value })}>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select></label>
-            <label className="f">Cash in Bank Sub-account
-              <select value={form.bankSub} disabled={form.accountCode !== '1010'} onChange={e => { setForm({ ...form, bankSub: e.target.value }); setFormError(''); }} aria-describedby="banksub-hint">
-                <option value="">— None —</option>
-                {CASH_IN_BANK_CHILDREN.map(c => <option key={c.code} value={c.code}>{c.code} — {c.name}</option>)}
-              </select>
-              <span className="field-hint" id="banksub-hint">{form.accountCode === '1010'
-                ? 'Required for Cash in Bank — choose where the money sits.'
-                : 'Only used with 1010 — Cash in Bank.'}</span>
-              {form.accountCode === '1010' && <span className="field-hint">Screen only for now — the sub-account is not yet sent with the entry (backend pending); the entry submits coded 1010 — Cash in Bank.</span>}
-            </label>
-            <label className="f">Amount (₱)<input type="number" value={form.amount} onChange={e => setForm({ ...form, amount: Number(e.target.value) })} placeholder="Enter the amount in pesos" /></label>
-            <label className="f full">Particulars<textarea rows={2} value={form.remarks} onChange={e => setForm({ ...form, remarks: e.target.value })} placeholder="Receipt / OR / SI reference" /></label>
-          </div>
-          <div className="btn-row no-print" style={{ marginTop: 10 }}>
-            <button className="btn" onClick={submit}>Submit for Review</button>
-            <button className="btn ghost" onClick={() => window.print()}>Print entry</button>
-            <span className="small muted">Demo: entry is saved locally and queued — nothing is posted yet. Printing never submits or saves.</span>
-          </div>
-          <div className="print-entry" aria-label="Printable draft of the current entry">
-            <div className="print-head">
-              <div className="print-company">Ayop Group of Companies — JEM51 Accounting System</div>
-              <h2>New Transaction Entry (draft)</h2>
-              <div className="print-meta">DRAFT — not submitted, not posted. Values shown exactly as entered on screen.</div>
-              <div className="print-demo">SYNTHETIC DEMONSTRATION DATA — requires accounting validation before production use.</div>
-            </div>
-            <div className="tbl-wrap"><table className="tbl"><tbody>
-              <tr><td><strong>Date</strong></td><td>{form.date || '—'}</td></tr>
-              <tr><td><strong>Business Unit</strong></td><td>{form.businessUnit}</td></tr>
-              <tr><td><strong>Account Title</strong></td><td>{form.accountCode} — {form.accountName}</td></tr>
-              <tr><td><strong>Transaction Kind</strong></td><td>{form.kind}</td></tr>
-              <tr><td><strong>Counterparty</strong></td><td>{form.supplier || '—'}</td></tr>
-              <tr><td><strong>Classification</strong></td><td>{form.classification}</td></tr>
-              <tr><td><strong>Cash in Bank Sub-account</strong></td><td>{bankSubLabel}</td></tr>
-              <tr><td><strong>Amount</strong></td><td className="num"><Money n={form.amount} /></td></tr>
-              <tr><td><strong>Particulars</strong></td><td>{form.remarks || '—'}</td></tr>
-            </tbody></table></div>
-          </div>
-        </div>
+        <TransactionEntryForm
+          onSubmit={handleFormSubmit}
+          onCancel={() => setShow(false)}
+          onPrint={() => window.print()}
+        />
       )}
-      <div className="card">
+      <div className={`card${show ? ' no-print' : ''}`}>
         <div className="filters">
           <select value={fUnit} onChange={e => setFUnit(e.target.value)}><option>All</option>{BUSINESS_UNITS.map(u => <option key={u}>{u}</option>)}</select>
           <select value={fClass} onChange={e => setFClass(e.target.value)}><option>All</option>{CLASSIFICATIONS.map(c => <option key={c}>{c}</option>)}</select>

@@ -220,6 +220,42 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
 .audit li { margin-bottom: 6px; }
 .hamb { display: none; }
 
+/* new transaction entry form (front-end only) */
+.txn-new-entry { display: block; margin-bottom: 14px; }
+.txn-header h2 { margin: 0 0 12px; font-size: 18px; letter-spacing: .02em; color: var(--navy); }
+.txn-form { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; }
+.txn-section { margin-bottom: 18px; }
+.section-title { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.form-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+.form-row .full { grid-column: 1 / -1; }
+
+.entries-grid { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.entries-header, .entry-row { display: grid; grid-template-columns: minmax(0, 1fr) 130px 130px 44px; align-items: center; }
+.entries-header { background: #f1f3f9; color: var(--navy); font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; font-weight: 700; }
+.entries-header .entry-col { padding: 9px 10px; }
+.entry-row { border-top: 1px solid var(--line); }
+.entry-row .entry-col { padding: 6px 8px; }
+.entry-col-amount { text-align: right; }
+.account-select, .amount-input { width: 100%; font: inherit; padding: 7px 9px; border: 1px solid var(--line); border-radius: 7px; background: #fff; color: var(--ink); }
+.amount-input { text-align: right; font-variant-numeric: tabular-nums; }
+.entry-col-action { display: flex; justify-content: center; }
+.btn-remove { min-width: 30px; padding: 4px 8px; }
+.entries-actions { margin-top: 8px; }
+
+.totals-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; max-width: 520px; }
+.total-box { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; background: #f7f9fd; }
+.total-box.imbalance { border-color: #f0dfae; background: var(--amber-bg); }
+.total-label { font-size: 11.5px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.total-amount { font-size: 17px; font-weight: 700; color: var(--navy); font-variant-numeric: tabular-nums; }
+.imbalance-warning { margin-top: 10px; background: var(--red-bg); border: 1px solid #f3c0ba; color: var(--red); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; }
+.balanced-indicator { margin-top: 10px; background: var(--green-bg); border: 1px solid #bfe3cd; color: var(--green); border-radius: 8px; padding: 9px 12px; font-size: 13px; font-weight: 600; }
+
+.signatories-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.signatory-audited { grid-column: 1 / 3; }
+.txn-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+
+.print-only { display: none; }
+
 /* print */
 .print-head { display: none; }
 /* transaction-entry draft printout: screen-hidden summary shown only on paper */
@@ -244,6 +280,24 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
   /* New Entry printout: hide the interactive form, show the draft summary */
   .print-entry { display: block; }
   .txn-entry .form-grid, .txn-entry .btn-row, .txn-entry .steps { display: none !important; }
+  /* New Transaction entry form: hide screen UI, show the accounting printout */
+  .txn-new-entry .txn-header, .txn-new-entry .txn-form { display: none !important; }
+  .txn-new-entry .print-only { display: block; }
+  .print-header { margin-bottom: 10px; }
+  .print-header h1 { margin: 2px 0; font-size: 19px; color: #000; }
+  .print-body { font-size: 12px; }
+  .print-table { width: 100%; border-collapse: collapse; margin-bottom: 10px; }
+  .print-table th, .print-table td { border: 1px solid #999; padding: 6px 8px; text-align: left; }
+  .print-table thead th { background: #eee; }
+  .print-table .total-row td { background: #f1f3f9; font-weight: 700; }
+  .print-imbalance { border: 1px solid #999; padding: 6px 8px; margin-bottom: 10px; }
+  .signatories-print { margin-top: 34px; }
+  .sig-row { display: flex; gap: 24px; margin-bottom: 26px; }
+  .sig-field { flex: 1; }
+  .sig-name { min-height: 15px; font-size: 12px; text-align: center; }
+  .sig-line { border-bottom: 1px solid #000; height: 1px; margin-bottom: 4px; }
+  .sig-label { font-size: 11px; text-align: center; }
+  .sig-field-audited { max-width: 33%; }
 }
 
 @media (max-width: 980px) {

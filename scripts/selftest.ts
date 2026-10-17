@@ -395,60 +395,59 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     && bankSubError('', '') === null
     && coerceBankSub('1010', '1010-3') === '1010-3' && coerceBankSub('1010', '') === ''
     && coerceBankSub('5000', '1010-3') === '' && coerceBankSub('1000', '1010-1') === '');
-  // Entry form reuses the exact approved bank choices, keeps the sub-account
-  // out of the save payload (backend pending), and preserves the 8-field
-  // sketch arrangement with existing data fields intact (static).
+  // The redesigned entry form lives in a dedicated component wired into the
+  // Transaction screen. It is front-end only: state and totals stay in the
+  // browser and nothing is persisted (no addTxn/API/journal call).
   {
     const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
-    check('entry: form wires the approved sub-accounts with isolated state (static)',
-      CASH_IN_BANK_CHILDREN.length === 5
-      && txnSrc.includes("from './Accounting'")
-      && txnSrc.includes('CASH_IN_BANK_CHILDREN') && txnSrc.includes('coerceBankSub') && txnSrc.includes('bankSubError')
-      && txnSrc.includes('Cash in Bank Sub-account') && txnSrc.includes('Account Title')
-      && txnSrc.includes('Counterparty') && txnSrc.includes('Particulars')
-      && txnSrc.includes('bankSub: _notPersisted')
-      && txnSrc.includes('backend') && txnSrc.includes('pending'));
-    // Streamlined entry form: Additional item details section gone (Item,
-    // category, prices, quantity inputs), Classification placed directly
-    // after Counterparty, submit button renamed — while removed values are
-    // reconstructed at submit so downstream data keeps working.
-    check('entry: streamlined form — no item-details section, Classification placed, button renamed (static)',
-      !txnSrc.includes('Additional item details') && !txnSrc.includes('f">Item category<select')
-      && !txnSrc.includes('f">Supplier Price<input') && !txnSrc.includes('f">Retail Price<input')
-      && !txnSrc.includes('f">Quantity<input') && !txnSrc.includes('f">Item<input')
-      && txnSrc.indexOf('f">Counterparty') < txnSrc.indexOf('f">Classification')
-      && txnSrc.indexOf('f">Classification') < txnSrc.indexOf('Cash in Bank Sub-account')
-      && txnSrc.includes('>Submit for Review</button>')
-      && !txnSrc.includes('Submit for Accountant Review')
-      && !txnSrc.includes('submit for Accountant Review')
-      && !txnSrc.includes('go to Accountant Review')
-      && txnSrc.includes('const item = form.remarks.trim()')
-      && txnSrc.includes("category: 'Medical Supplies'"));
+    const compSrc = readFileSync('src/components/TransactionEntryForm.tsx', 'utf8');
+    check('entry: dedicated form component wired in, diagram sections A-E (static)',
+      txnSrc.includes("import TransactionEntryForm from '../components/TransactionEntryForm'")
+      && txnSrc.includes('<TransactionEntryForm')
+      && compSrc.includes('NEW TRANSACTION (NEW ENTRY)')
+      && compSrc.includes('A. Transaction Details') && compSrc.includes('B. Particulars')
+      && compSrc.includes('C. Account Entries') && compSrc.includes('D. Totals')
+      && compSrc.includes('E. Signatories'));
+    // Diagram parity: account-entry grid with Account Title / Credit / Debit,
+    // three initial rows, add & remove, live totals and imbalance handling.
+    check('entry: account-entry grid, three rows, add/remove, live totals + imbalance (static)',
+      !txnSrc.includes('addTxn(') && !compSrc.includes('addTxn')
+      && compSrc.includes('Account Title') && compSrc.includes('>Credit<') && compSrc.includes('>Debit<')
+      && compSrc.includes('+ Add Entry')
+      && (compSrc.match(/id: '[0-9]+', accountTitle: '', credit: '', debit: ''/g) || []).length === 3
+      && compSrc.includes('const addEntry') && compSrc.includes('const removeEntry')
+      && compSrc.includes('const totalCredit = round2(formData.entries.reduce')
+      && compSrc.includes('const totalDebit = round2(formData.entries.reduce')
+      && compSrc.includes('inputMode="decimal"') && compSrc.includes('sanitizeAmount')
+      && compSrc.includes('imbalance-warning') && compSrc.includes('balanced-indicator'));
+    check('entry: four signatories present (static)',
+      compSrc.includes('Prepared & Checked By') && compSrc.includes('Posted By')
+      && compSrc.includes('Approved By') && compSrc.includes('Audited By'));
   // Start-an-Entry card removed: the duplicate strip (and its Start button)
   // is gone from the Transaction screen while + New Transaction stays the
-  // single entry point to the untouched entry form.
+  // single entry point that reveals the new entry form.
   {
     const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
     check('entry: Start-an-Entry card removed, + New Transaction kept (static)',
       !txnSrc.includes('next-action') && !txnSrc.includes('Start an entry')
       && txnSrc.includes('+ New transaction')
-      && txnSrc.includes('New transaction entry')
-      && txnSrc.includes('>Submit for Review</button>'));
+      && txnSrc.includes('<TransactionEntryForm'));
   }
   // New Entry print support (static): a Print action opens the browser
-  // print dialog without submitting anything, and a screen-hidden draft
-  // summary (explicitly marked unsaved) is the only entry content shown on
-  // paper while the interactive form hides via print CSS.
+  // print dialog without submitting anything, and a screen-hidden print
+  // summary is the only entry content shown on paper while the interactive
+  // form hides via print CSS.
   {
-    const txnSrc = readFileSync('src/pages/Transactions.tsx', 'utf8');
+    const compSrc = readFileSync('src/components/TransactionEntryForm.tsx', 'utf8');
     const printCss = readFileSync('src/styles.css', 'utf8');
-    check('entry: Print action with unsaved-draft printout, form hidden on paper (static)',
-      txnSrc.includes('Print entry') && txnSrc.includes('window.print()')
-      && txnSrc.includes('print-entry') && txnSrc.includes('New Transaction Entry (draft)')
-      && txnSrc.includes('DRAFT — not submitted, not posted')
-      && txnSrc.includes('Printing never submits or saves')
-      && printCss.includes('.print-entry { display: none; }')
-      && printCss.includes('.txn-entry .form-grid, .txn-entry .btn-row, .txn-entry .steps'));
+    check('entry: Print action with screen-hidden printout, form hidden on paper (static)',
+      compSrc.includes('Print Transaction') && compSrc.includes('onPrint')
+      && compSrc.includes('print-only') && compSrc.includes('print-table')
+      && compSrc.includes('signatories-print') && compSrc.includes('sig-name')
+      && !compSrc.includes('.filter(e => e.accountTitle')
+      && printCss.includes('.print-only { display: none; }')
+      && printCss.includes('.txn-new-entry .txn-header, .txn-new-entry .txn-form { display: none !important; }')
+      && printCss.includes('.sig-name'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their
   // counts/amounts are gone, while the entry form, filters, search, status
