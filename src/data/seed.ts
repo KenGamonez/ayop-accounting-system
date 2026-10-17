@@ -67,6 +67,10 @@ export interface Txn {
   remarks: string;
   /** Set on offsetting correction entries — finance counts them negative. */
   reversalOf?: string;
+  /** Full account lines captured at entry (frontend-only; not sent to the backend). */
+  lines?: JournalLine[];
+  /** Display-only control reference captured at entry. */
+  controlNo?: string;
 }
 
 export interface InventoryItem {
@@ -131,6 +135,8 @@ export interface JournalEntry {
   queuedTxn?: string;
   /** Multi-line breakdown for guided entries; summary fields stay compatible. */
   lines?: JournalLine[];
+  /** Display-only control reference captured at entry. */
+  controlNo?: string;
 }
 
 export interface AuditEvent {

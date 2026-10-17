@@ -5,7 +5,7 @@ import { applyReceipt, derivePOStatus, defaultInventoryTypeFor, lineRemaining, i
 nextRoleFor, nextTxnId, countsAsPosted, ALLOWED_TRANSITIONS, validateDisbursement, inDateRange,
 dateRangeError, journalTotals, validateJournal, staffIdForName, canActOnApprovals, isCreator,
 ownRecords, canResubmit, guardTransition, newEntryErrors, newEntryTotals,
-disbursementFromNewEntry, journalFromNewEntry } from '../src/data/ops.ts';
+disbursementFromNewEntry, journalFromNewEntry, journalEntryLines, disbursementEntryLines } from '../src/data/ops.ts';
 import { postedIn, signedAmount, sumByClass, trialBalance, incomeSummary, conditionSummary } from '../src/data/finance.ts';
 import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts';
 import { TRANSACTION_KINDS, COA, STAFF, CLASSIFICATIONS } from '../src/data/seed.ts';
@@ -448,13 +448,14 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
   // shown on paper while the interactive form hides via print CSS.
   {
     const compSrc = readFileSync('src/components/TransactionEntryForm.tsx', 'utf8');
+    const voucherSrc = readFileSync('src/components/VoucherPrint.tsx', 'utf8');
     const printCss = readFileSync('src/styles.css', 'utf8');
     check('entry: Print action with screen-hidden voucher, form hidden on paper (static)',
       compSrc.includes('Print Transaction') && compSrc.includes('onPrint')
-      && compSrc.includes('print-only') && compSrc.includes('voucher-table')
-      && compSrc.includes('voucher-signatures') && compSrc.includes('voucher-sig-name')
-      && compSrc.includes('Control No.') && compSrc.includes('DISBURSEMENT VOUCHER')
-      && compSrc.includes('JOURNAL VOUCHER')
+      && compSrc.includes('print-only') && compSrc.includes('VoucherPrint')
+      && voucherSrc.includes('voucher-table') && voucherSrc.includes('voucher-signatures')
+      && voucherSrc.includes('voucher-sig-name') && voucherSrc.includes('Control No.')
+      && voucherSrc.includes('DISBURSEMENT VOUCHER') && voucherSrc.includes('JOURNAL VOUCHER')
       && !compSrc.includes('.filter(e => e.accountTitle')
       && printCss.includes('.print-only { display: none; }')
       && printCss.includes('.txn-new-entry .txn-header, .txn-new-entry .txn-form { display: none !important; }')
@@ -589,6 +590,48 @@ const neJrnl3 = journalFromNewEntry({
 }, 'JV-TEST-002');
 check('new entry → Journal marks multiple credit accounts honestly',
   neJrnl3.creditAccount === 'Multiple (3 lines)' && neJrnl3.amount === 150 && (neJrnl3.lines ?? []).length === 3);
+
+// ---- saved-entry view + print: control number, full lines, no invented money ----
+const neDisFull = disbursementFromNewEntry(neBase, 'Jeann', 'JEM51-TXN-20261014-001');
+const neJrnlFull = journalFromNewEntry({ ...neBase, transactionType: 'Journal' }, 'JV-1', 'JEM51-TXN-20261014-002');
+check('new entry save keeps the control number and every account line (both types)',
+  neDisFull.controlNo === 'JEM51-TXN-20261014-001' && (neDisFull.lines ?? []).length === 2
+  && (neDisFull.lines ?? [])[0].accountCode === '5000'
+  && neJrnlFull.controlNo === 'JEM51-TXN-20261014-002' && (neJrnlFull.lines ?? []).length === 2
+  && disbursementFromNewEntry(neBase, 'Jeann').controlNo === undefined,
+  { dis: neDisFull.controlNo, jrnl: neJrnlFull.controlNo });
+const disWithLines = disbursementEntryLines({
+  accountCode: '5000', accountName: 'Medical Supplies Expense', amount: 7700,
+  lines: [
+    { accountCode: '5000', accountName: 'Medical Supplies Expense', debit: 7700, credit: 0 },
+    { accountCode: '1010', accountName: 'Cash in Bank', debit: 0, credit: 7700 },
+  ],
+});
+const disNoLines = disbursementEntryLines({ accountCode: '5000', accountName: 'Medical Supplies Expense', amount: 7700 });
+check('saved disbursement voucher uses stored lines; falls back to the stored account only',
+  disWithLines.length === 2 && disWithLines[1].accountCode === '1010' && disWithLines[1].credit === 7700
+  && disNoLines.length === 1 && disNoLines[0].debit === 7700 && disNoLines[0].credit === 0, { disNoLines });
+const jrnlStored = journalEntryLines({
+  debitAccount: '5000 — Medical Supplies Expense', creditAccount: 'Multiple (3 lines)', amount: 150,
+  lines: [
+    { accountCode: '5000', accountName: 'Medical Supplies Expense', debit: 100, credit: 0 },
+    { accountCode: '5100', accountName: 'Office Supplies Expense', debit: 50, credit: 0 },
+    { accountCode: '1010', accountName: 'Cash in Bank', debit: 0, credit: 150 },
+  ],
+});
+const jrnlFallback = journalEntryLines({ debitAccount: '5000 — Medical Supplies Expense', creditAccount: '1010 — Cash in Bank', amount: 7700 });
+check('saved journal voucher uses stored lines; summary fallback invents no amount',
+  jrnlStored.length === 3 && jrnlStored[2].accountCode === '1010'
+  && jrnlFallback.length === 2 && jrnlFallback[0].accountCode === '5000'
+  && jrnlFallback[0].debit === 7700 && jrnlFallback[1].credit === 7700, { jrnlFallback });
+check('saved-entry view + print wired into both lists (static)',
+  ['src/pages/Disbursement.tsx', 'src/pages/Journal.tsx'].every((f) => {
+    const s = readFileSync(f, 'utf8');
+    return s.includes('setViewId') && s.includes('Print voucher') && s.includes('VoucherPrint')
+      && s.includes('window.print()') && s.includes('className="print-only"');
+  })
+  && readFileSync('src/components/VoucherPrint.tsx', 'utf8').includes('voucherTitleFor')
+  && readFileSync('src/pages/Transactions.tsx', 'utf8').includes('savingRef'));
 
 // ---- income & expense ITEM CODE + GL-only screen + sidebar ----
 check('income tables headed ITEM CODE (not Item)',

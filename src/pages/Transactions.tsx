@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { BUSINESS_UNITS, CLASSIFICATIONS } from '../data/seed';
 import { canResubmit, disbursementFromNewEntry, journalFromNewEntry, newEntryErrors } from '../data/ops';
@@ -16,6 +16,8 @@ export default function Transactions() {
   const [q, setQ] = useState('');
   const [mineOnly, setMineOnly] = useState(false);
   const [show, setShow] = useState(false);
+  // Guards against a second save while the first is still persisting.
+  const savingRef = useRef(false);
 
   const filtered = useMemo(() => txns.filter(t =>
     (fUnit === 'All' || t.businessUnit === fUnit) &&
@@ -30,21 +32,25 @@ export default function Transactions() {
   // addTxn; Journal entries become drafts via addJournal. Unbalanced or
   // incomplete entries are blocked with plain-language messages.
   const handleFormSubmit = async (data: TransactionFormData) => {
+    if (savingRef.current) return;
     const errs = newEntryErrors(data);
     if (errs.length) { alert(errs.join('\n')); return; }
+    savingRef.current = true;
     try {
       if (data.transactionType === 'Journal') {
         const refNo = 'JV-' + new Date().toISOString().slice(0, 10).replace(/-/g, '') + '-' + String(journal.length + 1).padStart(3, '0');
-        addJournal(journalFromNewEntry(data, refNo));
+        addJournal(journalFromNewEntry(data, refNo, data.controlNo));
         setShow(false);
         alert(`${refNo} saved as a Journal draft. Open Transaction → Journal to queue it for review.`);
       } else {
-        const txn = await addTxn(disbursementFromNewEntry(data, user?.name ?? 'Demo user'));
+        const txn = await addTxn(disbursementFromNewEntry(data, user?.name ?? 'Demo user', data.controlNo));
         setShow(false);
         alert(`${txn.id} saved to Disbursement and queued for accountant review.`);
       }
     } catch (e) {
       alert(e instanceof Error ? e.message : 'Could not save the entry.');
+    } finally {
+      savingRef.current = false;
     }
   };
 

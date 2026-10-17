@@ -2,7 +2,7 @@
 // receipt math, status derivation, and inventory-type defaults. Covered by
 // scripts/selftest.ts so the rules stay honest as the UI evolves.
 
-import type { JournalEntry, PurchaseOrder, Txn, TxnStatus } from './seed';
+import type { JournalEntry, JournalLine, PurchaseOrder, Txn, TxnStatus } from './seed';
 import { BUSINESS_UNITS, COA, STAFF, TRANSACTION_KINDS } from './seed';
 
 export type POStatus = PurchaseOrder['status'];
@@ -338,12 +338,29 @@ function firstDebitAccount(d: NewEntryInput): { code: string; name: string } {
 }
 
 /**
+ * Every usable New Entry line (coded + non-zero), with account names resolved
+ * from the shared chart. Used by both save mappers so a saved record keeps the
+ * complete debit/credit breakdown, not just a summary.
+ */
+function newEntryLines(d: NewEntryInput): JournalLine[] {
+  return d.entries
+    .map(e => ({ code: (e.accountTitle ?? '').trim(), debit: entryMoney(e.debit), credit: entryMoney(e.credit) }))
+    .filter(l => l.code && (l.debit > 0 || l.credit > 0))
+    .map(l => {
+      const acct = COA.find(c => c.code === l.code);
+      return { accountCode: l.code, accountName: acct?.name ?? '', debit: l.debit, credit: l.credit };
+    });
+}
+
+/**
  * Map a balanced New Entry to a Disbursement record: the entry total becomes
  * the payment amount and the first debit line its account (the form has no
- * supplier, shown as an em dash). Nothing here is invented beyond the existing
- * Disbursement shape; it queues for accountant review via addTxn.
+ * supplier, shown as an em dash). Every account line and the entry's control
+ * number are kept so the saved record can be reopened and printed exactly.
+ * Nothing here is invented beyond the existing Disbursement shape; it queues
+ * for accountant review via addTxn.
  */
-export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string): Omit<Txn, 'id' | 'status'> {
+export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string, controlNo?: string): Omit<Txn, 'id' | 'status'> {
   const t = newEntryTotals(d.entries);
   const acct = firstDebitAccount(d);
   return {
@@ -362,6 +379,8 @@ export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string): O
     accountName: acct.name,
     enteredBy,
     remarks: 'New entry saved from Transaction — queued for accountant review, not posted',
+    lines: newEntryLines(d),
+    controlNo,
   };
 }
 
@@ -369,14 +388,8 @@ export function disbursementFromNewEntry(d: NewEntryInput, enteredBy: string): O
  * Map a balanced New Entry to a Journal draft, keeping every usable line.
  * Summary fields mirror the guided journal form (first debit/credit accounts).
  */
-export function journalFromNewEntry(d: NewEntryInput, ref: string): Omit<JournalEntry, 'id'> {
-  const lines = d.entries
-    .map(e => ({ code: (e.accountTitle ?? '').trim(), debit: entryMoney(e.debit), credit: entryMoney(e.credit) }))
-    .filter(l => l.code && (l.debit > 0 || l.credit > 0))
-    .map(l => {
-      const acct = COA.find(c => c.code === l.code);
-      return { accountCode: l.code, accountName: acct?.name ?? '', debit: l.debit, credit: l.credit };
-    });
+export function journalFromNewEntry(d: NewEntryInput, ref: string, controlNo?: string): Omit<JournalEntry, 'id'> {
+  const lines = newEntryLines(d);
   const firstDr = lines.find(l => l.debit > 0);
   const firstCr = lines.find(l => l.credit > 0);
   const total = lines.reduce((s, l) => s + l.debit, 0);
@@ -393,5 +406,30 @@ export function journalFromNewEntry(d: NewEntryInput, ref: string): Omit<Journal
     status: 'Draft',
     sourceTxn: 'NEW ENTRY',
     lines,
+    controlNo,
   };
+}
+
+/**
+ * Voucher display lines for a saved Journal entry. Uses the stored line
+ * breakdown when present; otherwise reconstructs two lines from the stored
+ * summary fields — reusing the already-saved amount, never inventing money.
+ */
+export function journalEntryLines(j: Pick<JournalEntry, 'lines' | 'debitAccount' | 'creditAccount' | 'amount'>): JournalLine[] {
+  if (j.lines && j.lines.length) return j.lines.map(l => ({ ...l }));
+  const codeOf = (s: string) => /^\s*([A-Za-z0-9-]+)/.exec(s ?? '')?.[1] ?? '';
+  return [
+    { accountCode: codeOf(j.debitAccount), accountName: '', debit: j.amount, credit: 0 },
+    { accountCode: codeOf(j.creditAccount), accountName: '', debit: 0, credit: j.amount },
+  ];
+}
+
+/**
+ * Voucher display lines for a saved Disbursement. Uses the stored line
+ * breakdown when present; otherwise the single stored account/amount — never
+ * inventing a counter-account the record does not hold.
+ */
+export function disbursementEntryLines(t: Pick<Txn, 'lines' | 'accountCode' | 'accountName' | 'amount'>): JournalLine[] {
+  if (t.lines && t.lines.length) return t.lines.map(l => ({ ...l }));
+  return [{ accountCode: t.accountCode, accountName: t.accountName, debit: t.amount, credit: 0 }];
 }
