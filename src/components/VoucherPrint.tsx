@@ -81,13 +81,15 @@ export default function VoucherPrint({
   const balanced = totalDebit === totalCredit;
   const chargedLines = lines.filter(l => l.debit > 0);
   const payableAmount = amount ?? totalDebit;
+  const printedAt = new Date().toLocaleString('en-PH');
 
   return (
     <div className="voucher">
+      <div className="voucher-brand">{SYSTEM_NAME}</div>
+
       <header className="voucher-head">
         <div className="voucher-company">{COMPANY_NAME}</div>
         <div className="voucher-address">{COMPANY_ADDRESS}</div>
-        <div className="voucher-system">{SYSTEM_NAME}</div>
         <div className="voucher-title">{title}</div>
       </header>
 
@@ -182,7 +184,7 @@ export default function VoucherPrint({
 
           {balanced ? (
             <div className="voucher-status voucher-balanced">
-              Total Debit {peso(totalDebit)} equals Total Credit {peso(totalCredit)}.
+              Total Debit: {peso(totalDebit)} equals Total Credit: {peso(totalCredit)}.
             </div>
           ) : (
             <div className="voucher-status voucher-imbalance">
@@ -239,7 +241,10 @@ export default function VoucherPrint({
         </>
       )}
 
-      <div className="voucher-foot">{footer}</div>
+      <div className="voucher-foot">
+        <span>{footer}</span>
+        <span className="voucher-foot-printed">Printed by: JEM51 · {printedAt}</span>
+      </div>
     </div>
   );
 }

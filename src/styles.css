@@ -320,34 +320,35 @@ select:disabled { background: #f1f3f9; color: var(--muted); cursor: not-allowed;
   .print-only { display: block; }
   /* New Transaction printable voucher */
   .voucher { font-size: 12px; color: #111; }
-  .voucher-head { text-align: center; padding-bottom: 10px; border-bottom: 2px solid #14234a; }
-  /* Company identity (name once + address), system line, and voucher title are
-     all centered across the full printable width. */
-  .voucher-company { font-size: 15px; font-weight: 700; letter-spacing: .08em; color: #14234a; }
-  .voucher-address { font-size: 10.5px; color: #5b6478; margin-top: 2px; }
-  .voucher-system { font-size: 10.5px; font-weight: 700; letter-spacing: .04em; color: #5b6478; margin-top: 2px; }
-  .voucher-title { font-size: 17px; font-weight: 700; letter-spacing: .05em; color: #14234a; margin-top: 8px; }
-  .voucher-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 22px; margin: 16px 0 4px; }
-  .voucher-field { display: flex; flex-direction: column; gap: 2px; }
+  .voucher-brand { text-align: left; font-size: 11px; font-weight: 700; letter-spacing: .02em; color: #14234a; }
+  /* Company identity (name once + address) and the voucher title are centered
+     across the full printable width; the system brand sits top-left. */
+  .voucher-head { text-align: center; margin-top: 12px; padding-bottom: 10px; border-bottom: 2px solid #14234a; }
+  .voucher-company { font-size: 21px; font-weight: 800; letter-spacing: .04em; color: #14234a; }
+  .voucher-address { font-size: 12px; color: #33415c; margin-top: 3px; }
+  .voucher-title { font-size: 27px; font-weight: 800; letter-spacing: .06em; color: #14234a; margin-top: 12px; }
+  .voucher-details { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 28px; margin: 18px 0 4px; }
+  .voucher-field { display: flex; flex-direction: column; gap: 3px; }
   .voucher-field-full { grid-column: 1 / -1; }
-  .voucher-field-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .07em; color: #5b6478; font-weight: 700; }
-  .voucher-field-value { font-size: 12px; color: #111; white-space: pre-wrap; overflow-wrap: anywhere; }
-  .voucher-table { width: 100%; border-collapse: collapse; margin-top: 14px; }
-  .voucher-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 8px 10px; border: 1px solid #b9c0d0; background: #eef1f6; color: #14234a; }
-  .voucher-table td { font-size: 12px; padding: 8px 10px; border: 1px solid #cdd3e0; vertical-align: top; overflow-wrap: anywhere; }
+  .voucher-field-label { font-size: 9.5px; text-transform: uppercase; letter-spacing: .09em; color: #5b6478; font-weight: 700; }
+  .voucher-field-value { font-size: 12.5px; color: #14234a; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .voucher-table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  .voucher-table th { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; text-align: left; padding: 9px 12px; border: 1px solid #aab6cc; background: #e8edf6; color: #14234a; font-weight: 700; }
+  .voucher-table td { font-size: 12px; padding: 8px 12px; border: 1px solid #c3ccdd; vertical-align: top; overflow-wrap: anywhere; }
   .voucher-table th.num, .voucher-table td.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .voucher-total-row td { border-top: 2px solid #14234a; background: #f4f6fa; font-weight: 700; color: #14234a; }
-  .voucher-status { font-size: 11px; margin-top: 8px; }
-  .voucher-balanced { color: #3f4a5f; }
+  .voucher-total-row td { border-top: 2px solid #14234a; background: #eef1f7; font-weight: 700; color: #14234a; }
+  .voucher-status { font-size: 11.5px; margin-top: 10px; color: #33415c; }
+  .voucher-balanced { color: #33415c; }
   .voucher-imbalance { border: 1px solid #b91c1c; color: #b91c1c; font-weight: 700; padding: 6px 10px; }
-  .voucher-signatures { display: flex; gap: 30px; margin-top: 44px; }
-  .voucher-signatures-audited { justify-content: flex-end; margin-top: 30px; }
+  .voucher-signatures { display: flex; gap: 34px; margin-top: 34px; }
+  .voucher-signatures-audited { justify-content: flex-end; margin-top: 24px; }
   .voucher-sig { flex: 1; min-width: 0; text-align: center; }
   .voucher-signatures-audited .voucher-sig { flex: 0 1 34%; }
-  .voucher-sig-line { height: 30px; border-bottom: 1px solid #14234a; margin-bottom: 6px; }
+  .voucher-sig-line { height: 26px; border-bottom: 1px solid #14234a; margin-bottom: 6px; }
   .voucher-sig-role { font-size: 10px; text-transform: uppercase; letter-spacing: .06em; color: #14234a; font-weight: 700; }
   .voucher-sig-name { font-size: 11px; color: #111; min-height: 14px; margin-top: 2px; overflow-wrap: anywhere; }
-  .voucher-foot { margin-top: 26px; padding-top: 8px; border-top: 1px solid #cdd3e0; font-size: 9.5px; color: #5b6478; }
+  .voucher-foot { display: flex; justify-content: space-between; gap: 16px; margin-top: 22px; padding-top: 8px; border-top: 1px solid #c3ccdd; font-size: 9.5px; color: #5b6478; }
+  .voucher-foot-printed { white-space: nowrap; }
   .voucher-head, .voucher-details, .voucher-signatures { break-inside: avoid; }
 }
 

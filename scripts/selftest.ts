@@ -469,9 +469,12 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
     // Disbursement vs a debit/credit table for Journal.
     check('voucher: type-aware documents, company name once with address (static)',
       (voucherSrc.match(/AYOP GROUP OF COMPANIES/g) ?? []).length === 1
+      && (voucherSrc.match(/JEM51 Accounting System/g) ?? []).length === 1
       && voucherSrc.includes('JEM Bldg., Medina St. Carmen-Annex, Ozamiz City - Misamis Occidental')
+      && voucherSrc.includes('voucher-brand')
       && voucherSrc.includes('Control No.')
       && voucherSrc.includes('Account Charged') && voucherSrc.includes('Account Title')
+      && voucherSrc.includes('Printed by:')
       && voucherSrc.includes('isDisbursementType'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their
