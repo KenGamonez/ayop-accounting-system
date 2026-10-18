@@ -11,13 +11,14 @@ import { computeClose, monthRange, closeFingerprint } from '../src/data/close.ts
 import { TRANSACTION_KINDS, COA, STAFF, CLASSIFICATIONS } from '../src/data/seed.ts';
 import { accountLabel, accountLedger, accountOptions, balanceSheet, cashFlow, getAccount, isDebitNormal } from '../src/data/finance.ts';
 import { roleKindFor, canVisit, navFor, WAREHOUSE_SECTIONS, ACCOUNTING_ONLY_LABELS, WAREHOUSE_TX_SUBS } from '../src/data/access.ts';
+import { STAFF_CARDS, staffCardById } from '../src/data/staffDirectory.ts';
 import { DEMO_USERNAME, DEMO_PASSWORD, DEMO_AUTH_KEY, verifyDemoLogin } from '../src/data/demoAccess.ts';
 import { mapDbTxn, mapRpcError, membershipToStaff, toDbPayload, type DbTxnRow } from '../src/data/live.ts';
 import {
   mapDbPO, mapDbItem, toDbPOPayload, toDbItemPayload,
   type DbPORow, type DbPOLine, type DbItemRow,
 } from '../src/data/live.ts';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolveBackendMode } from '../src/data/backend.ts';
 import { BUSINESS_UNITS, STAFF } from '../src/data/seed.ts';
 import { NAV } from '../src/components/Layout.tsx';
@@ -940,6 +941,29 @@ check('demo credentials verify correctly',
 check('all seven switchable profiles exist with canonical ids',
   STAFF.map(s => s.id).join() === 'joy,eve,dani,jeann,jinky,mae,rodel'
   && STAFF.every(s => s.id && s.name && s.role && s.unit));
+
+// ---- premium sign-in dashboard: four-card staff directory ----
+check('staff directory maps the four cards to canonical Staff ids',
+  STAFF_CARDS.map(c => c.id).join() === 'joy,dani,jeann,rodel'
+  && STAFF_CARDS.every(c => STAFF.some(s => s.id === c.id)));
+check('staff directory uses the exact display names and titles',
+  STAFF_CARDS.map(c => c.name + '|' + c.title).join(',')
+  === 'Joy Ayop|CEO,Daniflor|Accounting,Je Anne|Warehouse,Rodel A|IT');
+check('every staff card portrait exists and is a JPEG',
+  STAFF_CARDS.every(c => {
+    const rel = 'public' + c.photo; // '/staff/...' → public/staff/...
+    if (!existsSync(rel)) return false;
+    const head = readFileSync(rel);
+    return head.length > 3 && head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff;
+  }));
+check('staffCardById resolves known ids and rejects unknown/null',
+  staffCardById('dani')?.name === 'Daniflor'
+  && staffCardById('nope') === null
+  && staffCardById(null) === null);
+check('login page renders the directory and keeps live sign-in credential-based',
+  readFileSync('src/pages/Login.tsx', 'utf8').includes('STAFF_CARDS')
+  && readFileSync('src/pages/Login.tsx', 'utf8').includes('staffCardById')
+  && readFileSync('src/pages/Login.tsx', 'utf8').includes('liveLogin'));
 
 // ---- slice 3 prep, continued: draft cancellation, still no posting ----
 const mig4 = readFileSync('supabase/migrations/20261014000004_journal_draft_cancel.sql', 'utf8');
