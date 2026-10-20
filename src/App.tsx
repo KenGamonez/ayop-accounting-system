@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { StoreProvider, useStore } from './store/AppStore';
 import Layout from './components/Layout';
 import Login from './pages/Login';
@@ -20,8 +20,11 @@ import CloseChecklist from './pages/CloseChecklist';
 
 function Guard({ children }: { children: React.ReactNode }) {
   const { user, mode, demoAuthed } = useStore();
-  if (mode !== 'live' && !demoAuthed) return <Navigate to="/admin/login" replace />;
-  if (!user) return <Navigate to="/admin/login" replace />;
+  const location = useLocation();
+  // Carry the requested location so sign-in can return there (deep links).
+  const toLogin = <Navigate to="/admin/login" replace state={{ from: location }} />;
+  if (mode !== 'live' && !demoAuthed) return toLogin;
+  if (!user) return toLogin;
   return <>{children}</>;
 }
 
