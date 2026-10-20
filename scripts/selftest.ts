@@ -485,30 +485,51 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && voucherSrc.includes('isDisbursementType'));
   }
   // Disbursement metrics removed (static): the four summary KPIs and their
-  // counts/amounts are gone, while the entry form, filters, search, status
-  // indicators, table, and actions remain wired to the same data.
+  // counts/amounts are gone. The page-local entry form, filters and table are
+  // replaced by the shared book component (EntryBook) that both the
+  // Disbursement and the Journal page render, so the create button, the filter
+  // bar (including the restored Journal text search) and the table text now
+  // live there instead of in this page file.
   {
     const disSrc = readFileSync('src/pages/Disbursement.tsx', 'utf8');
-    check('disbursement: summary metrics removed, list and actions intact (static)',
+    const bookSrc = readFileSync('src/components/EntryBook.tsx', 'utf8');
+    check('disbursement: summary metrics removed, shared book list and actions intact (static)',
       !disSrc.includes('Matching entries') && !disSrc.includes('Posted total')
       && !disSrc.includes('Pending excluded') && !disSrc.includes('postedTotal')
       && !disSrc.includes('lbl">Pending') && !disSrc.includes('lbl">Rejected')
-      && disSrc.includes('Record a disbursement') && disSrc.includes('+ Record disbursement')
-      && disSrc.includes('Start Date') && disSrc.includes('Particulars / Payment details')
-      && disSrc.includes('validateDisbursement') && disSrc.includes('<Pill status='));
+      && !disSrc.includes('+ Record disbursement') && !disSrc.includes('Record a disbursement')
+      && disSrc.includes('EntryBook')
+      && bookSrc.includes('Start Date') && bookSrc.includes('End Date')
+      && bookSrc.includes('Clear / Reset') && bookSrc.includes('🖨 Print')
+      && bookSrc.includes('Debit account') && bookSrc.includes('Credit account')
+      && bookSrc.includes('Amount') && bookSrc.includes('<Pill status=')
+      && bookSrc.includes('View') && bookSrc.includes('No entries match these filters'));
+    // The Journal text search was restored on BOTH pages via the shared book:
+    // same control (ref / particulars, case-insensitive), combined with the
+    // unit and date filters, cleared by Clear / Reset, and reflected in print.
+    check('shared book: Journal text search restored on both pages (static)',
+      bookSrc.includes('Search ref / particulars') && bookSrc.includes('eb-search')
+      && bookSrc.includes('const [search, setSearch]')
+      && bookSrc.includes('r.searchText.includes(term)')
+      && bookSrc.includes("(j.ref + (j.particulars || '')).toLowerCase()")
+      && bookSrc.includes("((t.controlNo ?? '') + (t.item || '')).toLowerCase()")
+      && bookSrc.includes('setSearch(\'\')')
+      && bookSrc.includes('Search: "'));
   }
   // End of Disbursement-metrics removal check block.
   }
   // Shared catalog: 2200 Accrued Income resolves everywhere the shared COA
-  // is used (GL lookup/options, Disbursement + Journal validation), with all
-  // prior accounts intact. No posting rule is invented here.
-  check('coa: 2200 Accrued Income shared across GL, Disbursement, Journal paths',
+  // is used (GL lookup/options, the shared entry-form account select, and
+  // Disbursement + Journal validation), with all prior accounts intact. No
+  // posting rule is invented here. Creation moved off both list pages, so the
+  // account select is asserted where the create form now lives.
+  check('coa: 2200 Accrued Income shared across GL, entry form, Journal paths',
     getAccount('2200')?.name === 'Accrued Income' && getAccount('2200')?.type === 'Asset'
     && accountOptions().some(o => o.code === '2200' && o.name === 'Accrued Income')
     && getAccount('1010')?.name === 'Cash in Bank' && getAccount('1000')?.name === 'Cash on Hand'
     && validateDisbursement({ date: '2026-10-14', businessUnit: 'Pharmacy', particulars: 'Accrued service income', supplier: 'PhilHealth', accountCode: '2200', amount: 12500 }).length === 0
     && readFileSync('src/pages/Disbursement.tsx', 'utf8').includes("from '../data/seed'")
-    && readFileSync('src/pages/Disbursement.tsx', 'utf8').includes('COA.map'));
+    && readFileSync('src/components/TransactionEntryForm.tsx', 'utf8').includes('COA.map'));
   // Equity classification option: present alongside the original four, and
   // accepted by import validation (same shared CLASSIFICATIONS source as the
   // entry form). No account code or posting mapping is invented.

@@ -1,0 +1,26 @@
+/*
+ * Scoped styles for the shared Disbursement / Journal book (EntryBook.tsx).
+ * Every rule here is namespaced to .entry-book so nothing can reach another
+ * screen. The paper-size rule is a *named* @page, applied only to this
+ * container, so every other report keeps the global A4 portrait @page.
+ */
+
+.entry-book .eb-print { display: none; }
+.entry-book .eb-count { margin-top: 8px; }
+/* Search box keeps the original Journal width; flex-shrink lets the filter
+   bar wrap cleanly at narrow widths instead of overflowing. */
+.entry-book .eb-search { min-width: 240px; flex: 1 1 240px; max-width: 340px; }
+
+@page entry-book {
+  size: A4 landscape;
+  margin: 12mm;
+}
+
+@media print {
+  .entry-book { page: entry-book; }
+  .entry-book .eb-print { display: block; margin-bottom: 10px; }
+  .entry-book .eb-search { display: none; }
+  .entry-book .eb-title { margin: 2px 0; font-size: 19px; font-weight: 700; color: #000; }
+  /* Nine columns on one landscape sheet: tighten the book's own cells only. */
+  .entry-book .tbl th, .entry-book .tbl td { padding: 6px 8px; font-size: 11.5px; }
+}
