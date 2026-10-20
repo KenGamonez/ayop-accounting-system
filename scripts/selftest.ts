@@ -484,36 +484,45 @@ check('gl: 1010 children are UI-only (no COA record, no ledger data)',
       && voucherSrc.includes('Account Title') && voucherSrc.includes('Debit') && voucherSrc.includes('Credit')
       && voucherSrc.includes('isDisbursementType'));
   }
-  // Disbursement metrics removed (static): the four summary KPIs and their
-  // counts/amounts are gone. The page-local entry form, filters and table are
-  // replaced by the shared book component (EntryBook) that both the
-  // Disbursement and the Journal page render, so the create button, the filter
-  // bar (including the restored Journal text search) and the table text now
-  // live there instead of in this page file.
+  // Disbursement/Journal content removed (static): the yellow demo banner is
+  // now suppressed on exactly these two routes, the page subtitle and the
+  // "+ New ..." create button are gone, and the Journal explainer box is gone.
+  // Everything else on the page (both cards, columns, search, print, actions)
+  // is preserved in the shared book component (EntryBook) that both pages render.
   {
     const disSrc = readFileSync('src/pages/Disbursement.tsx', 'utf8');
+    const jrnSrc = readFileSync('src/pages/Journal.tsx', 'utf8');
     const bookSrc = readFileSync('src/components/EntryBook.tsx', 'utf8');
-    check('disbursement: summary metrics removed, shared book list and actions intact (static)',
+    const layoutSrc = readFileSync('src/components/Layout.tsx', 'utf8');
+    check('disbursement/journal: banner, subtitle, create button and explainer removed, shared book intact (static)',
       !disSrc.includes('Matching entries') && !disSrc.includes('Posted total')
       && !disSrc.includes('Pending excluded') && !disSrc.includes('postedTotal')
       && !disSrc.includes('lbl">Pending') && !disSrc.includes('lbl">Rejected')
       && !disSrc.includes('+ Record disbursement') && !disSrc.includes('Record a disbursement')
-      && disSrc.includes('EntryBook')
+      && !disSrc.includes('Record cash payments and find past disbursements')
+      && !jrnSrc.includes('+ New journal entry') && !jrnSrc.includes('What is a journal entry?')
+      && !jrnSrc.includes('Record adjustments the other screens')
+      && disSrc.includes('EntryBook') && jrnSrc.includes('EntryBook')
+      // Both pages keep their read-only saved-record view + voucher print.
+      && disSrc.includes('VoucherPrint') && jrnSrc.includes('VoucherPrint')
+      // Banner suppressed on exactly these two routes (route-based flag).
+      && layoutSrc.includes("path === '/admin/disbursement'") && layoutSrc.includes("path === '/admin/journal'")
+      && layoutSrc.includes('isEntryBook')
+      && bookSrc.includes('Drafts awaiting review') && bookSrc.includes('All entries (')
       && bookSrc.includes('Start Date') && bookSrc.includes('End Date')
       && bookSrc.includes('Clear / Reset') && bookSrc.includes('🖨 Print')
       && bookSrc.includes('Debit account') && bookSrc.includes('Credit account')
       && bookSrc.includes('Amount') && bookSrc.includes('<Pill status=')
-      && bookSrc.includes('View') && bookSrc.includes('No entries match these filters'));
-    // The Journal text search was restored on BOTH pages via the shared book:
-    // same control (ref / particulars, case-insensitive), combined with the
-    // unit and date filters, cleared by Clear / Reset, and reflected in print.
+      && bookSrc.includes('View') && bookSrc.includes('No entries match these filters')
+      && bookSrc.includes('Queue for review') && bookSrc.includes('Queued as'));
+    // The Journal text search sits inside the "All entries" card exactly where
+    // it was: same control (ref / particulars, case-insensitive), combined with
+    // the unit and date filters, cleared by Clear / Reset, reflected in print.
     check('shared book: Journal text search restored on both pages (static)',
-      bookSrc.includes('Search ref / particulars') && bookSrc.includes('eb-search')
-      && bookSrc.includes('const [search, setSearch]')
+      bookSrc.includes('Search ref / particulars')
       && bookSrc.includes('r.searchText.includes(term)')
-      && bookSrc.includes("(j.ref + (j.particulars || '')).toLowerCase()")
-      && bookSrc.includes("((t.controlNo ?? '') + (t.item || '')).toLowerCase()")
-      && bookSrc.includes('setSearch(\'\')')
+      && bookSrc.includes("(j.ref + j.particulars).toLowerCase()")
+      && bookSrc.includes('setRef(\'\')')
       && bookSrc.includes('Search: "'));
   }
   // End of Disbursement-metrics removal check block.
